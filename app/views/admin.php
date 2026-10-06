@@ -24,7 +24,6 @@ $navigation = ['/admin' => ['dashboard', 'Dashboard'], '/admin/applications' => 
 </div>
 <main id="main" class="dashboard-main admission-main">
     <p class="eyebrow">PENGELOLAAN PENERIMAAN</p><h1><?= escape($title) ?></h1>
-    <?php if ($adminAllowed): ?><div class="demo-banner">Lingkungan pengembangan. Verifikasi berkas bukan keputusan diterima. Data uji saja; portal admin produksi belum dibuka.</div><?php endif; ?>
     <?php if ($notice): ?><div class="notice" role="status"><?= escape($notice) ?></div><?php endif; ?>
     <?php if ($errors): ?><div class="error-summary" role="alert" tabindex="-1" data-error-summary><?= escape($errors['form']) ?><?php if (http_response_code() === 409): ?><p><a href="<?= escape($path) ?>"><?= $screen === 'master' ? 'Muat ulang data' : 'Muat ulang verifikasi' ?></a></p><?php endif; ?></div><?php endif; ?>
     <?php if ($screen === 'dashboard'): ?>

@@ -124,7 +124,8 @@ try {
             $action = $mode === 'delete' ? 'delete' : input('action');
             masterAction($db, $type, $id, (int) $user['id'], masterVersion(), $action);
             flash($action === 'delete' ? 'Master data dihapus.' : 'Status arsip master data diperbarui.');
-            redirect('/admin/master-data/' . $type);
+            $returnList = ($_GET['return_list'] ?? '') === '1';
+            redirect('/admin/master-data/' . $type . ($returnList ? '?' . http_build_query(['q' => $query, 'page' => $page]) : ''));
         }
     }
 } catch (AdmissionProblem $exception) {

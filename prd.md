@@ -74,6 +74,10 @@ periode baru. Draf yang dibatalkan tidak membuka kembali hak edit/hapus master.
 Sekolah dengan periode harus menghapus periode yang belum dipakai terlebih dahulu
 sebelum sekolah dapat dihapus. Arsip sekolah mengarsipkan seluruh periodenya,
 tanpa menghapus data peserta. Periode baru selalu arsip dan untuk pengujian.
+Pemilihan master hanya melalui dropdown header, tanpa tab duplikat. Tabel memakai
+ikon aksi berlabel aksesibilitas dan toggle aktif/arsip yang menyimpan melalui POST.
+Penghapusan tetap melalui konfirmasi. Penghilangan banner lingkungan pengembangan
+tidak menghapus penanda periode uji atau membuka pembatasan produksi.
 
 ### MVP
 - Multi-tenant: yayasan/dinas, sekolah, jenjang, kampus/lokasi, tahun ajaran, gelombang.
@@ -248,6 +252,91 @@ Setiap catatan penerimaan merujuk pada tenant, periode, versi aturan, pemilik da
 4. **Perluasan:** sekolah swasta mandiri, multi-gelombang, beasiswa/pembayaran, integrasi yang sudah memperoleh akses resmi.
 
 Pilot sebaiknya mencakup sekurangnya satu sekolah negeri dan satu swasta pada satu jenjang, lalu diperluas setelah evaluasi aksesibilitas, akurasi aturan, kapasitas, dukungan operator, dan pengelolaan data.
+
+### 15.1 Roadmap lanjutan: admin terlebih dahulu
+
+**Status seluruh tahap di bawah: rencana, belum diimplementasikan**, kecuali
+fondasi pilot yang disebut pada bagian 5. Prioritas kerja pertama tetap SMP negeri
+Kabupaten Serdang Bedagai; perluasan swasta dilakukan setelah alur inti stabil.
+Admin pusat yang sudah ada dipertahankan. Data akun, pendaftaran, dokumen, snapshot,
+dan riwayat lama tidak boleh hilang saat migrasi.
+
+Admin-first berarti konfigurasi, otorisasi, alur keputusan, dan audit dibangun
+lebih dahulu. Bukan berarti seluruh proses bisa selesai tanpa sisi wali:
+perbaikan berkas, hasil personal, sanggah, dan daftar ulang memerlukan pasangan
+alur wali minimum pada tahap yang sama. Jangan membuat menu kosong atau tombol
+yang seolah sudah menjalankan proses; modul muncul setelah alur lengkapnya siap.
+
+| Urutan / ID | Modul admin dan peningkatan | Prasyarat | Kriteria selesai minimum |
+|---|---|---|---|
+| 1 / A-01 | **Akun, peran, dan akses sekolah:** undangan staf, aktivasi/nonaktif, penugasan satu/beberapa sekolah, hak per aksi, MFA staf dan verifikasi email. | Pemetaan kewenangan disepakati pemilik produk. | Akses daftar/detail/dokumen/ekspor dibatasi server; staf sekolah A ditolak mengakses sekolah B meskipun mengganti URL/ID. Pencabutan akses membatalkan sesi terkait; seluruh perubahan grant diaudit. |
+| 2 / A-02 | **Master operasional:** tahun ajaran, rombel, kapasitas sekolah, kuota tiap jalur, jadwal pendaftaran/verifikasi/perbaikan/seleksi/hasil/sanggah/daftar ulang, rujukan Juknis dan paket aturan berversi. | A-01; paket Juknis daerah/tahun ajaran dan pejabat persetujuan tersedia. | Total kursi jalur sesuai kapasitas; pembulatan dan sisa kursi eksplisit; validasi aturan negeri tidak diterapkan otomatis ke swasta. Jadwal tidak konflik. Paket ditinjau/disetujui sebelum terbit; aturan terbit tidak ditimpa. |
+| 3 / A-03 | **Manajemen pendaftar dan antrean:** tabel pencarian/filter/sort/pagination, penugasan verifikator, antrean belum ditugaskan/ditangani/terlambat, deteksi potensi duplikasi dan ringkasan kerja. | A-01. | Penugasan dan pengambilalihan tugas tercatat; konflik dua petugas ditolak dengan pesan jelas. Potensi duplikasi ditinjau manusia, tidak otomatis menghapus/menolak peserta. Draf tetap tidak dibuka untuk pemeriksaan staf. |
+| 4 / A-04 | **Verifikasi rinci dan koreksi terkontrol:** checklist per dokumen/kriteria jalur, alasan, permintaan perbaikan kolom/berkas tertentu, tenggat, kirim ulang dan pemeriksaan ulang. | A-02 untuk jadwal/aturan; A-03 untuk penugasan. | Snapshot kiriman pertama tetap utuh; koreksi menjadi revisi baru. Hanya bagian yang diminta dapat diperbaiki dalam tenggat; versi dokumen dan keputusan sebelumnya dapat ditelusuri. Wali dapat memperbaiki/kirim ulang; status dan notifikasi in-app konsisten. |
+| 5 / A-05 | **Seleksi dan simulasi:** pemeriksaan kelayakan, input nilai/bukti bila berlaku, rubrik, skor, urutan prioritas, tie-break, kuota dan daftar cadangan. | A-02 dan A-04; metode seleksi disahkan. | Simulasi tidak mengubah hasil resmi. Run resmi memakai snapshot input/aturan dan menghasilkan alasan yang dapat direproduksi. Uji skor sama, batas kuota, pembulatan, peserta tidak layak dan kursi sisa; hasil tidak melampaui kapasitas. |
+| 6 / A-06 | **Persetujuan dan pengumuman hasil:** tinjau hasil, persetujuan dua pihak, penjadwalan publikasi, hasil personal diterima/cadangan/tidak diterima dan koreksi hasil berversi. | A-05; approver berbeda dari pengaju. | Hasil draft tidak terlihat oleh wali; publikasi hanya setelah persetujuan dan waktunya tiba. Penerbitan ulang tidak menggandakan keputusan; hasil personal tidak membocorkan peserta lain. Koreksi mencatat alasan, versi dan pemberitahuan. |
+| 7 / A-07 | **Sanggah dan pengaduan:** tiket, kategori, bukti, tenggat, penugasan, tanggapan dan eskalasi. | A-01 untuk pengaduan umum; A-06 untuk sanggah hasil. | Wali melihat tiketnya saja. Bukti privat, riwayat tanggapan dan tenggat tercatat; sanggah tidak langsung mengubah hasil. Perubahan keputusan kembali melalui persetujuan dan versi hasil. |
+| 8 / A-08 | **Daftar ulang dan pengelolaan kursi:** konfirmasi, pemeriksaan dokumen akhir, status belum/selesai/mengundurkan diri/lewat tenggat, penawaran kursi cadangan. | A-06 dan mekanisme keputusan A-07; kebijakan kursi/tenggat disahkan. | Konfirmasi idempoten; transaksi mencegah kursi ganda/kelebihan kapasitas. Pelepasan dan penawaran ulang kursi mengikuti aturan, masa berlaku, urutan cadangan dan audit; wali mendapat tanda terima. |
+| 9 / A-09 | **Laporan dan ekspor:** statistik per sekolah/jalur/tahap, rekap verifikasi, seleksi, daftar ulang dan kursi kosong; CSV serta laporan cetak. | A-01; sumber tahap terkait tersedia. | Ekspor dibatasi sekolah/peran, kolom sensitif diminimalkan, tujuan/pelaku tercatat, dan CSV aman dari formula injection. Total laporan direkonsiliasi dengan sumber; pagination tidak memotong ekspor. Statistik publik tidak mengidentifikasi anak. |
+| 10 / A-10 | **Informasi publik dan komunikasi:** identitas resmi, jadwal, kapasitas, syarat, FAQ, kontak bantuan, template pesan, pusat notifikasi dan antrean pengiriman. | A-02; identitas/konten/kanal disetujui. | Konten punya pratinjau dan persetujuan. Notifikasi in-app tersedia minimal pada A-04/A-06/A-08; email memakai antrean dengan status gagal/retry tanpa mengirim ganda. SMS/WhatsApp hanya setelah penyedia dan izin disepakati. |
+| 11 / A-11 | **Operasional, audit dan kesiapan produksi:** audit dapat dicari/filter, monitoring, backup/restore, retensi, pemindaian berkas dan prosedur insiden. | Dimulai sejak A-01; gate produksi setelah seluruh alur wajib siap. | Uji pemulihan DB dan berkas berhasil, retensi disahkan, audit keputusan/akses/ekspor lengkap, uji beban dan otorisasi lulus. Tidak ada tombol unduh backup DB berisi data anak untuk staf sekolah. Blokir produksi tetap berlaku sampai checklist rilis disetujui. |
+| 12 / A-12 | **Perluasan opsional:** pilihan lintas sekolah, wilayah/jarak, swasta/gelombang, tes/wawancara/beasiswa, pembayaran sah dan integrasi resmi. | Alur inti serta kebijakan/izin/data masing-masing tersedia. | Pilihan lintas sekolah mencegah alokasi kursi ganda sesuai Juknis. Geodata berlisensi dan metode jarak disahkan; pembayaran hanya pada skenario yang sah. Integrasi tidak diklaim aktif tanpa API/otorisasi dan uji nyata. |
+
+Urutan adalah prioritas backlog, bukan keharusan menunggu seluruh daftar:
+A-03 dapat dikerjakan setelah A-01 sambil A-02 disiapkan; A-09 dapat dimulai untuk
+data verifikasi sebelum seleksi tersedia; A-10 dan A-11 berjalan paralel sesuai
+prasyarat. Seleksi tidak boleh dimulai hanya karena menu kuota sudah ada.
+
+#### Pekerjaan pertama yang direkomendasikan
+
+Mulai **A-01: Akun & akses sekolah**, bukan langsung menambah mesin ranking.
+
+1. Sepakati matriks admin pusat, admin sekolah, verifikator, dan approver:
+   siapa mengelola akun/aturan, memeriksa, mengekspor, dan menerbitkan hasil.
+   Peran teknis admin tidak otomatis memperoleh kewenangan keputusan penerimaan.
+2. Tambahkan grant/penugasan sekolah dan izin aksi secara aditif; jangan
+   membangun ulang akun lama atau otomatis mempromosikan akun wali.
+3. Ganti daftar akun hanya-baca menjadi pengelolaan undangan staf, penugasan dan
+   pencabutan akses; tidak ada password bersama atau password polos yang dapat dilihat admin.
+4. Terapkan pemeriksaan akses yang sama pada halaman, query daftar, aksi POST,
+   unduhan dokumen, dashboard, audit dan ekspor; nonaktifkan akses segera saat grant dicabut.
+5. Selesaikan MFA staf dan verifikasi kepemilikan email sebelum penggunaan nyata.
+   Uji akses lintas sekolah, perubahan role/ID dari klien, undangan kedaluwarsa,
+   pencabutan sesi, CSRF dan konflik versi; sediakan uji desktop/ponsel.
+
+Sesudah A-01 selesai, lanjut A-02 **kapasitas/kuota/jadwal dan aturan berversi**,
+lalu A-03/A-04 **antrean dan koreksi**. Pengembangan tetap menggunakan data uji.
+
+#### Rencana pengelompokan menu admin
+
+- **Dashboard:** ringkasan dibatasi kewenangan sekolah, antrean, tenggat dan kursi.
+- **Pendaftar:** daftar, detail, penugasan, verifikasi dan permintaan perbaikan.
+- **Master data:** sekolah, tahun ajaran/periode, rombel, kuota/jalur dan paket aturan.
+- **Seleksi & hasil:** simulasi, run, persetujuan dan pengumuman.
+- **Sanggah & pengaduan**, **Daftar ulang**, **Laporan**.
+- **Pengaturan:** akun/peran, konten informasi, notifikasi dan konfigurasi operasional.
+- **Audit:** pencarian riwayat sesuai hak akses; bukan akses penuh log teknis untuk semua staf.
+
+Menu dapat dikelompokkan dalam dropdown agar header tidak terlalu panjang.
+Navigasi menyesuaikan izin, tetapi menyembunyikan menu bukan pengganti otorisasi server.
+Pemisahan status wajib: **status pengiriman/revisi**, **status verifikasi**,
+**hasil seleksi**, dan **status daftar ulang** tidak digabung menjadi satu status.
+Valid berarti berkas memenuhi pemeriksaan, bukan otomatis diterima.
+
+#### Keputusan kebijakan yang belum boleh diasumsikan
+
+- Juknis Serdang Bedagai dan tahun ajaran efektif, pejabat pengesah, kapasitas
+  rombel, persentase efektif, pembulatan, prioritas, tie-break dan kursi sisa.
+- Apakah satu staf boleh menangani beberapa sekolah dan siapa approver independen.
+- Satu atau beberapa pilihan sekolah; perpindahan pilihan dan pencegahan kursi ganda.
+- Kolom/berkas yang boleh dikoreksi, tenggat, prosedur sanggah dan daftar ulang.
+- Dasar pemrosesan/retensi, penerima laporan, kanal notifikasi, dan target beban.
+
+Angka kuota, rumus ranking, jarak, dan tenggat tidak ditanam sebagai kebijakan
+default yang seolah telah disahkan. Lokasi GPS/formulir bukan bukti domisili;
+peta dan layanan geocoding internal belum tersedia untuk seleksi jarak.
+SQLite tetap dipakai untuk pengembangan; keputusan mempertahankan atau mengganti
+database produksi berdasarkan uji beban tulis dan kebutuhan operasional, bukan asumsi.
 
 ## 16. Kriteria penerimaan MVP
 

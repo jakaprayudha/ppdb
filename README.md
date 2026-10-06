@@ -155,6 +155,14 @@ produksi** sampai MFA, email verification, dasar kewenangan dan operasional siap
 
 ### CRUD master sekolah dan periode
 
+Pemilihan Sekolah / Periode pendaftaran hanya melalui dropdown Master data di
+header; tidak ada tab duplikat di bawah judul. Aksi tabel memakai ikon detail,
+edit, hapus, dan salin dengan label aksesibilitas serta tooltip. Toggle biru
+berarti aktif, abu-abu berarti arsip; klik menyimpan melalui POST dengan CSRF dan
+versi data, serta mempertahankan pencarian/halaman tabel. Penghapusan tetap
+memerlukan halaman konfirmasi. Banner “Lingkungan pengembangan” tidak ditampilkan;
+penanda periode belum dibuka dan pembatasan produksi tidak diubah.
+
 - Sekolah menyimpan NPSN unik (8 digit), nama, jenjang, mode negeri/swasta, wilayah,
   dan alamat. Data sekolah awal dihubungkan otomatis dari periode yang sudah ada,
   termasuk data lama/arsip; bukan hanya 40 periode aktif. Snapshot sumber resmi
@@ -165,7 +173,7 @@ produksi** sampai MFA, email verification, dasar kewenangan dan operasional siap
   Template negeri/swasta SD/SMP/SMA dapat mengganti isi editor setelah konfirmasi.
   Batas tetap 1–20 jalur dan maksimal 10 dokumen/jalur; kode unik dan aturan jalur
   negeri (tanpa prestasi SD) divalidasi server.
-- Periode baru disimpan sebagai **arsip** dan `is_demo=true`. Aktifkan melalui detail
+- Periode baru disimpan sebagai **arsip** dan `is_demo=true`. Aktifkan melalui toggle tabel atau detail
   setelah ditinjau. Ini hanya publikasi formulir pengujian, bukan pengesahan
   penerimaan nyata. Akses produksi tetap diblokir.
 - Sekolah/periode yang **belum pernah dipakai pendaftaran** boleh diedit.
@@ -430,7 +438,55 @@ proteksi akses admin/produksi.
 
 ## Berikutnya
 
-Sesuai [PRD](prd.md): verifikasi email, tenancy dan hak akses staf/MFA, alur koreksi
-dan pengiriman ulang berkas setelah verifikasi, aturan penerimaan yang disetujui, seleksi, hasil,
-sanggah, dan daftar ulang. Portal informasi publik lengkap juga belum tersedia;
-daftar periode pada tahap ini berada di area wali yang sudah login.
+### Roadmap admin-first
+
+**Ini backlog, bukan fitur yang sudah aktif.** Saat ini tersedia dashboard,
+verifikasi dasar, master sekolah/periode, daftar akun pusat hanya-baca dan audit
+100 aktivitas terakhir. Rincian scope, prasyarat, kriteria penerimaan, rancangan
+menu dan keputusan kebijakan ada di [PRD bagian 15.1](prd.md#151-roadmap-lanjutan-admin-terlebih-dahulu).
+
+| Prioritas | Improvement | Hasil yang dituju |
+|---|---|---|
+| 1 / A-01 | Akun, peran & akses sekolah | Undangan staf, penugasan sekolah, izin aksi, pencabutan akses/sesi, MFA staf dan verifikasi email. |
+| 2 / A-02 | Master operasional & aturan | Tahun ajaran, rombel, daya tampung, kuota jalur, jadwal tiap tahap, Juknis, versi dan persetujuan paket aturan. |
+| 3 / A-03 | Pendaftar & antrean | Tabel/filter/sort, penugasan verifikator, antrean kerja dan tinjauan potensi duplikasi. |
+| 4 / A-04 | Verifikasi rinci & koreksi | Checklist per berkas/kriteria, permintaan perbaikan terbatas, tenggat, revisi dan kirim ulang tanpa menimpa snapshot awal. |
+| 5 / A-05 | Seleksi & simulasi | Kelayakan, skor/prioritas/tie-break sesuai aturan, kuota dan cadangan; hasil dapat direproduksi. |
+| 6 / A-06 | Persetujuan & hasil | Review dua pihak, publikasi terjadwal, hasil personal dan koreksi hasil berversi. |
+| 7 / A-07 | Sanggah & pengaduan | Tiket, bukti privat, penugasan, tanggapan, tenggat dan eskalasi. |
+| 8 / A-08 | Daftar ulang & kursi | Konfirmasi, dokumen akhir, pengunduran diri/tenggat dan penawaran kursi cadangan tanpa alokasi ganda. |
+| 9 / A-09 | Laporan & ekspor | Rekap per sekolah/jalur/tahap, CSV aman dan laporan cetak, akses terbatas dan audit ekspor. |
+| 10 / A-10 | Informasi & komunikasi | Konten publik disetujui, FAQ, pusat notifikasi, template dan antrean email dengan retry terkontrol. |
+| 11 / A-11 | Operasional & gate produksi | Audit berfilter, monitoring, backup/restore, retensi, pemindaian unggahan dan uji beban/akses. |
+| 12 / A-12 | Perluasan opsional | Pilihan lintas sekolah, geodata/jarak, swasta/gelombang, tes/beasiswa/pembayaran yang sah dan integrasi resmi berizin. |
+
+**Mulai dari A-01: Akun & akses sekolah.** Sepakati matriks kewenangan admin
+pusat/admin sekolah/verifikator/approver, tambahkan grant secara aditif, bangun
+undangan dan penugasan staf, lalu terapkan izin yang sama pada daftar, detail,
+POST, dokumen, statistik, audit dan ekspor. Uji sekolah A tidak dapat mengakses
+sekolah B, register wali tidak menaikkan role, pencabutan akses membatalkan sesi,
+serta undangan/CSRF/konflik versi. Jangan langsung membangun ranking sebelum
+aturan dan data verifikasi siap.
+
+Setelah fondasi akses selesai, lanjut **A-02 kuota/jadwal/aturan**, lalu
+**A-03 antrean + A-04 koreksi**. Laporan verifikasi, informasi publik dan
+operasional dapat disiapkan paralel sesuai prasyarat; A-11 dimulai sejak fondasi,
+bukan baru saat akhir. Target awal tetap SMP negeri Serdang Bedagai.
+
+Admin-first tetap memerlukan alur wali minimum untuk koreksi, notifikasi in-app,
+hasil, sanggah dan daftar ulang. Status verifikasi **Valid bukan diterima**;
+status kiriman/revisi, verifikasi, seleksi dan daftar ulang harus terpisah.
+Portal informasi publik lengkap belum tersedia; katalog sekarang berada di area
+wali yang sudah login. Menu baru hanya ditampilkan ketika alurnya berfungsi,
+bukan sebagai placeholder.
+
+Sebelum implementasi aturan, pemilik kebijakan perlu menetapkan Juknis/tahun
+ajaran, pejabat pengesah, kapasitas/kuota efektif, pembulatan/tie-break/kursi sisa,
+jumlah pilihan sekolah dan tenggat. Tidak ada persentase, rumus jarak atau
+aturan swasta yang otomatis dianggap sah. Geocoding/peta internal masih belum
+tersedia; GPS bukan bukti domisili. Teknologi pengembangan tetap PHP/JS/HTML/CSS
+dan SQLite; kelayakan database produksi ditentukan lewat uji beban.
+
+Blokir produksi tidak dihapus oleh roadmap atau toggle katalog. Rilis nyata
+memerlukan persetujuan aturan, verifikasi email/MFA, pembatasan akses, privasi/
+retensi, backup yang diuji, pengamanan dokumen dan kesiapan operasional.

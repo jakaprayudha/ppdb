@@ -135,7 +135,14 @@ h1 { font-size: clamp(28px, 2.8vw, 36px); line-height: 1.2; font-weight: 650; le
 .master-dropdown > summary:hover, .master-dropdown > .active-menu { color: var(--primary); background: #eaf2ff; }
 .master-dropdown-menu { position: absolute; top: 100%; left: 0; width: 210px; padding: 8px; background: white; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgb(23 43 77 / 12%); }
 .master-dropdown-menu a { display: block; }
-.master-tabs { display: flex; flex-wrap: wrap; gap: 10px; margin: 24px 0; }.master-tabs a { padding: 12px 16px; text-decoration: none; border: 1px solid var(--line); border-radius: 8px; background: white; font-size: 13px; }.master-tabs a[aria-current] { color: var(--primary); border-color: var(--primary); }
+.master-icon-action { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 8px; background: white; text-decoration: none; }
+.master-icon-action:hover { background: #eaf2ff; }.master-icon-action svg { width: 20px; height: 20px; }
+.master-status-form { margin: 0; }
+.master-status-switch { display: inline-flex; align-items: center; width: 58px; height: 44px; padding: 8px 2px; background: transparent; border: 0; position: relative; }
+.master-status-switch::before { content: ''; position: absolute; inset: 8px 2px; border-radius: 20px; background: #69778b; }
+.master-status-switch[aria-checked="true"]::before { background: var(--primary); }
+.master-status-switch > span { position: relative; width: 22px; height: 22px; margin-left: 3px; background: white; border-radius: 50%; box-shadow: 0 1px 3px rgb(0 0 0 / 20%); }
+.master-status-switch[aria-checked="true"] > span { margin-left: 29px; }
 .master-table-wrap { margin-top: 24px; max-width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: white; }
 .master-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
 .master-table caption { text-align: left; padding: 16px; font-weight: 650; }

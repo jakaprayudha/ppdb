@@ -187,13 +187,34 @@ class MasterFlow(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("STATUS=403", result.stdout)
 
+    def test_table_icons_switch_and_filter_preservation(self):
+        school_id = self.create_school("99990016")
+        path = "/admin/master-data/schools?q=99990016&page=1"
+        status, body, _ = self.admin.request(path)
+        self.assertEqual(status, 200)
+        self.assertNotIn("master-tabs", body)
+        self.assertNotIn("Lingkungan pengembangan.", body)
+        for label in ["Detail", "Edit", "Hapus"]:
+            self.assertIn(f'aria-label="{label}" title="{label}"><svg', body)
+        self.assertIn('role="switch" aria-checked="true"', body)
+        action = f"/admin/master-data/schools/{school_id}?q=99990016&page=1&return_list=1"
+        status, body, headers = self.admin.request(action, {
+            "csrf": self.admin.csrf("/admin"), "version": self.school(school_id)["version"], "action": "archive"
+        })
+        self.assertEqual(status, 303, body)
+        self.assertEqual(headers["Location"], path)
+        self.assertIn('role="switch" aria-checked="false"', self.admin.request(path)[1])
+        self.assertEqual(self.school(school_id)["enabled"], 0)
+        self.assertEqual(self.action("schools", school_id, "activate")[0], 303)
+        self.assertEqual(self.action("schools", school_id, "delete")[0], 303)
+
     def test_z_pagination_and_search_of_40_schools(self):
         self.assertEqual(self.cli("sergai").returncode, 0)
         ids = []
         for page in range(1, 6):
             status, body, _ = self.admin.request(f"/admin/master-data/schools?page={page}")
             self.assertEqual(status, 200, body)
-            ids.extend(re.findall(r'/admin/master-data/schools/([a-f0-9]{32})">Detail', body))
+            ids.extend(re.findall(r'/admin/master-data/schools/([a-f0-9]{32})" aria-label="Detail"', body))
         self.assertEqual(len(ids), len(set(ids)))
         self.assertGreaterEqual(len(ids), 40)
         for kind in ["periods", "schools"]:

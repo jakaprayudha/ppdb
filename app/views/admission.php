@@ -98,7 +98,7 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
 </div>
 <main id="main" class="dashboard-main admission-main">
     <?php if ($config['environment'] === 'production'): ?><div class="demo-banner">Modul registrasi belum dibuka untuk data nyata. Perubahan data dinonaktifkan pada produksi.</div>
-    <?php else: ?><div class="demo-banner"><strong>Lingkungan pengembangan.</strong> Gunakan identitas dan dokumen uji, bukan data pribadi anak yang sebenarnya.</div><?php endif; ?>
+    <?php endif; ?>
     <?php if ($notice): ?><div class="notice" role="status"><?= escape($notice) ?></div><?php endif; ?>
     <?php if ($errors): ?><div class="error-summary" role="alert" tabindex="-1" data-error-summary><strong><?= escape($errors['form']) ?></strong>
         <?php if (count($errors) > 1): ?><ul><?php foreach ($errors as $field => $message): if ($field === 'form') { continue; } ?><li><?= escape($message) ?></li><?php endforeach; ?></ul><?php endif; ?>

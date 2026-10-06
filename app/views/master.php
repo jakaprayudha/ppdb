@@ -11,11 +11,36 @@ function masterInput(string $key, string $label, array $values, int $maximum = 2
     <?php
 }
 
+function masterIcon(string $icon): void
+{
+    $paths = [
+        'detail' => '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+        'edit' => '<path d="m16 3 5 5-12 12-6 1 1-6L16 3Z"/><path d="m14 5 5 5"/>',
+        'delete' => '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
+        'copy' => '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',
+    ];
+    echo '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' . $paths[$icon] . '</svg>';
+}
+
+function masterStatusSwitch(array $record, string $type, string $url): void
+{
+    $enabled = (int) $record['enabled'] === 1;
+    $name = admissionDisplayText($type === 'schools' ? $record['name'] : $record['school']);
+    $label = ($enabled ? 'Arsipkan ' : 'Aktifkan ') . $name;
+    ?>
+    <form method="post" action="<?= escape($url) ?>" class="master-status-form">
+        <input type="hidden" name="csrf" value="<?= escape(csrfToken()) ?>">
+        <input type="hidden" name="version" value="<?= (int) $record[$type === 'schools' ? 'version' : 'management_version'] ?>">
+        <input type="hidden" name="action" value="<?= $enabled ? 'archive' : 'activate' ?>">
+        <button type="submit" class="master-status-switch" role="switch" aria-checked="<?= $enabled ? 'true' : 'false' ?>" aria-label="<?= escape($label) ?>" title="<?= escape($label . ($type === 'schools' && $enabled ? ' beserta seluruh periodenya' : '')) ?>"><span aria-hidden="true"></span></button>
+    </form>
+    <?php
+}
+
 $base = '/admin/master-data/' . $type;
 $schoolType = $type === 'schools';
 $label = $schoolType ? 'Sekolah' : 'Periode pendaftaran';
 ?>
-<nav class="master-tabs" aria-label="Jenis master data"><a href="/admin/master-data/periods"<?= !$schoolType ? ' aria-current="page"' : '' ?>>Periode pendaftaran</a><a href="/admin/master-data/schools"<?= $schoolType ? ' aria-current="page"' : '' ?>>Sekolah</a></nav>
 <?php if ($mode === 'list'): ?>
     <div class="section-heading"><h2><?= escape($label) ?></h2><a class="button button-primary compact-button" href="<?= escape($base) ?>/new">Tambah <?= escape(strtolower($label)) ?></a></div>
     <p class="lead">Data belum dipakai boleh diedit/dihapus. Setelah ada pendaftaran, gunakan arsip atau buat periode baru. Arsip tidak menghapus data peserta.</p>
@@ -29,11 +54,11 @@ $label = $schoolType ? 'Sekolah' : 'Periode pendaftaran';
                 <tr><td><?= ($page - 1) * 10 + $index + 1 ?></td>
                     <?php if ($schoolType): ?><td><strong><?= escape(admissionDisplayText($row['name'])) ?></strong><small>NPSN <?= escape($row['npsn'] ?? 'belum tersedia') ?></small></td><td><?= escape($row['level']) ?><small><?= $row['mode'] === 'public_spmb' ? 'Negeri' : 'Swasta' ?></small></td><td><?= escape($row['district'] ?: 'Belum diisi') ?><small><?= escape($row['city']) ?></small></td><td><?= (int) $row['periods'] ?></td>
                     <?php else: $rules = admissionData($row['config_json']); ?><td><strong><?= escape(admissionDisplayText($row['school'])) ?></strong><small><?= escape($row['code']) ?></small></td><td><?= escape($row['academic_year']) ?></td><td><?= escape(admissionDate((int) $row['opens_at'], $row['timezone'])) ?><small>s/d <?= escape(admissionDate((int) $row['closes_at'], $row['timezone'])) ?></small></td><td><?= escape(implode(', ', array_column($rules['pathways'], 'name'))) ?></td><?php endif; ?>
-                    <td><span class="status-tag"><?= (int) $row['enabled'] ? 'Aktif di katalog' : 'Diarsipkan' ?></span><small><?= (int) $row['used'] ? 'Sudah dipakai' : 'Belum dipakai' ?></small></td>
-                    <td><div class="master-row-actions"><a href="<?= escape($base . '/' . $row['id']) ?>">Detail</a>
-                        <?php if (!(int) $row['used']): ?><a href="<?= escape($base . '/' . $row['id']) ?>/edit">Edit</a><?php endif; ?>
-                        <?php if (!(int) $row['used'] && (!$schoolType || !(int) $row['periods'])): ?><a class="danger-link" href="<?= escape($base . '/' . $row['id']) ?>/delete">Hapus</a><?php endif; ?>
-                        <?php if (!$schoolType): ?><a href="<?= escape($base . '/new?copy=' . $row['id']) ?>">Salin baru</a><?php endif; ?>
+                    <td><?php masterStatusSwitch($row, $type, $base . '/' . $row['id'] . '?' . http_build_query(['q' => $query, 'page' => $page, 'return_list' => '1'])); ?><small><?= (int) $row['used'] ? 'Sudah dipakai' : 'Belum dipakai' ?></small></td>
+                    <td><div class="master-row-actions"><a class="master-icon-action" href="<?= escape($base . '/' . $row['id']) ?>" aria-label="Detail" title="Detail"><?php masterIcon('detail'); ?></a>
+                        <?php if (!(int) $row['used']): ?><a class="master-icon-action" href="<?= escape($base . '/' . $row['id']) ?>/edit" aria-label="Edit" title="Edit"><?php masterIcon('edit'); ?></a><?php endif; ?>
+                        <?php if (!(int) $row['used'] && (!$schoolType || !(int) $row['periods'])): ?><a class="master-icon-action danger-link" href="<?= escape($base . '/' . $row['id']) ?>/delete" aria-label="Hapus" title="Hapus"><?php masterIcon('delete'); ?></a><?php endif; ?>
+                        <?php if (!$schoolType): ?><a class="master-icon-action" href="<?= escape($base . '/new?copy=' . $row['id']) ?>" aria-label="Salin baru" title="Salin baru"><?php masterIcon('copy'); ?></a><?php endif; ?>
                     </div></td>
                 </tr>
             <?php endforeach; ?><?php if (!$rows): ?><tr><td colspan="7">Tidak ada data yang cocok.</td></tr><?php endif; ?></tbody>
@@ -105,13 +130,12 @@ $label = $schoolType ? 'Sekolah' : 'Periode pendaftaran';
             </form>
             <?php endif; ?>
         <?php else: ?>
-            <span class="status-tag"><?= (int) $item['enabled'] ? 'Aktif di katalog' : 'Diarsipkan' ?></span><p><?= (int) $item['used'] ? 'Sudah dipakai pendaftaran: edit/hapus ditolak.' : 'Belum dipakai pendaftaran.' ?></p>
+            <?php masterStatusSwitch($item, $type, $base . '/' . $item['id']); ?><p><?= (int) $item['used'] ? 'Sudah dipakai pendaftaran: edit/hapus ditolak.' : 'Belum dipakai pendaftaran.' ?></p>
             <dl class="summary-grid"><?php if ($schoolType): foreach (['npsn' => 'NPSN', 'level' => 'Jenjang', 'province' => 'Provinsi', 'city' => 'Kabupaten/kota', 'district' => 'Kecamatan', 'address' => 'Alamat'] as $key => $text): ?><div><dt><?= escape($text) ?></dt><dd><?= escape($item[$key] ?? 'Belum tersedia') ?></dd></div><?php endforeach; else: foreach (['code' => 'Kode periode', 'academic_year' => 'Tahun ajaran', 'organizer' => 'Penyelenggara'] as $key => $text): ?><div><dt><?= escape($text) ?></dt><dd><?= escape($item[$key]) ?></dd></div><?php endforeach; ?><div><dt>Jadwal</dt><dd><?= escape(admissionDate((int) $item['opens_at'], $item['timezone']) . ' — ' . admissionDate((int) $item['closes_at'], $item['timezone'])) ?></dd></div><?php endif; ?></dl>
             <?php if (!$schoolType): $rules = admissionPresentation($item)['configuration']; ?><h3>Jalur dan persyaratan</h3><?php foreach ($rules['pathways'] as $route): ?><h4><?= escape($route['name']) ?></h4><p><?= escape($route['description']) ?></p><ul class="checklist"><?php foreach ($route['documents'] as $doc): ?><li><?= escape($doc['label']) ?> · <?= $doc['required'] ? 'Wajib' : 'Opsional' ?></li><?php endforeach; ?></ul><?php endforeach; ?><h3>Ketentuan</h3><p><?= escape($rules['rule_reference']) ?></p><p><?= escape($rules['privacy_notice']) ?></p><p><?= escape($rules['help_contact']) ?></p><?php endif; ?>
             <div class="action-row"><a class="button button-outline" href="<?= escape($base) ?>">Kembali</a>
                 <?php if (!(int) $item['used']): ?><a class="button button-outline" href="<?= escape($base . '/' . $item['id']) ?>/edit">Edit</a><?php endif; ?>
                 <?php if (!$schoolType): ?><a class="button button-outline" href="<?= escape($base . '/new?copy=' . $item['id']) ?>">Salin menjadi periode baru</a><?php endif; ?>
-                <form method="post"><input type="hidden" name="csrf" value="<?= escape(csrfToken()) ?>"><input type="hidden" name="version" value="<?= (int) $item[$schoolType ? 'version' : 'management_version'] ?>"><input type="hidden" name="action" value="<?= (int) $item['enabled'] ? 'archive' : 'activate' ?>"><button type="submit" class="button button-outline"><?= (int) $item['enabled'] ? 'Arsipkan' : 'Aktifkan' ?></button></form>
             </div>
             <?php if ($schoolType): ?><p class="field-help">Mengarsipkan sekolah mengarsipkan seluruh periodenya juga. Mengaktifkan sekolah tidak otomatis mengaktifkan kembali periode.</p><?php endif; ?>
         <?php endif; ?>
