@@ -10,9 +10,11 @@ try {
     require dirname(__DIR__) . '/app/bootstrap.php';
     require dirname(__DIR__) . '/app/admissions.php';
     require dirname(__DIR__) . '/app/admission_templates.php';
+    require dirname(__DIR__) . '/app/regional_admissions.php';
     $command = $argv[1] ?? '';
     if ($command === 'list') {
-        foreach ($db->query('SELECT * FROM admission_periods ORDER BY created_at DESC')->fetchAll() as $period) {
+        foreach ($db->query('SELECT p.*, COALESCE(v.enabled, 1) AS enabled FROM admission_periods p
+            LEFT JOIN admission_period_availability v ON v.period_id = p.id ORDER BY p.created_at DESC')->fetchAll() as $period) {
             echo $period['code'] . "\t" . $period['school'] . "\t" . periodState($period)
                 . "\t" . ($period['is_demo'] ? 'DEMO' : 'NON-DEMO') . PHP_EOL;
         }
@@ -45,6 +47,9 @@ try {
         ];
         $id = insertAdmissionPeriod($db, $configuration);
         echo "Periode DEMO dibuat: $id\n";
+    } elseif ($command === 'sergai') {
+        $count = seedSerdangBedagai($db, $config);
+        echo "$count periode DEMO SMP negeri Kabupaten Serdang Bedagai tersedia. Periode lain diarsipkan; pendaftaran lama tidak dihapus.\n";
     } elseif ($command === 'template') {
         if ($config['environment'] !== 'development') {
             throw new InvalidArgumentException('Template contoh hanya boleh dibuat pada development.');
@@ -63,7 +68,7 @@ try {
         $id = insertAdmissionPeriod($db, admissionData($contents));
         echo "Periode dibuat: $id\n";
     } else {
-        throw new InvalidArgumentException("Penggunaan:\nphp bin/admissions.php demo\nphp bin/admissions.php template negeri|swasta SD|SMP|SMA\nphp bin/admissions.php import /path/periode.json\nphp bin/admissions.php list");
+        throw new InvalidArgumentException("Penggunaan:\nphp bin/admissions.php demo\nphp bin/admissions.php sergai\nphp bin/admissions.php template negeri|swasta SD|SMP|SMA\nphp bin/admissions.php import /path/periode.json\nphp bin/admissions.php list");
     }
 } catch (Throwable $exception) {
     fwrite(STDERR, 'Gagal: ' . $exception->getMessage() . PHP_EOL);

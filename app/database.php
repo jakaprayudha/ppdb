@@ -65,6 +65,10 @@ function database(string $storage): PDO
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS admission_period_availability (
+            period_id TEXT PRIMARY KEY REFERENCES admission_periods(id),
+            enabled INTEGER NOT NULL CHECK (enabled IN (0, 1))
+        );
         CREATE INDEX IF NOT EXISTS participant_owner_idx ON participant_profiles(user_id);
         CREATE TABLE IF NOT EXISTS applications (
             id TEXT PRIMARY KEY,

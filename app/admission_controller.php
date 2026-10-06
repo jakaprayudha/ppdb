@@ -81,6 +81,9 @@ try {
         $period = admissionPeriod($db, $periodId);
         $selectedProfile = $method === 'POST' ? input('profile_id') : admissionQuery('profile');
         $selectedPathway = $method === 'POST' ? input('pathway') : '';
+        if (!(int) $period['enabled']) {
+            throw new AdmissionProblem('Periode diarsipkan. Pilih periode SMP negeri yang tersedia.', 409);
+        }
     }
     if (in_array($screen, ['application', 'receipt'], true)) {
         $application = ownedApplication($db, $applicationId, $userId);
@@ -216,11 +219,31 @@ try {
 $statement = $db->prepare('SELECT * FROM participant_profiles WHERE user_id = ? ORDER BY updated_at DESC');
 $statement->execute([$userId]);
 $profiles = $statement->fetchAll();
-$statement = $db->prepare('SELECT a.*, p.school, p.academic_year, p.is_demo, p.timezone FROM applications a
-    JOIN admission_periods p ON p.id = a.period_id WHERE a.user_id = ? ORDER BY a.updated_at DESC');
+$statement = $db->prepare('SELECT a.*, p.school, p.academic_year, p.is_demo, p.timezone, COALESCE(v.enabled, 1) AS period_enabled FROM applications a
+    JOIN admission_periods p ON p.id = a.period_id LEFT JOIN admission_period_availability v ON v.period_id = p.id
+    WHERE a.user_id = ? ORDER BY a.updated_at DESC');
 $statement->execute([$userId]);
 $applications = $statement->fetchAll();
-$periods = $db->query('SELECT * FROM admission_periods ORDER BY is_demo ASC, opens_at DESC')->fetchAll();
+$periods = $db->query('SELECT p.* FROM admission_periods p LEFT JOIN admission_period_availability v ON v.period_id = p.id
+    WHERE COALESCE(v.enabled, 1) = 1 ORDER BY p.is_demo ASC, p.school COLLATE NOCASE, p.opens_at DESC')->fetchAll();
+$districts = [];
+foreach ($periods as $item) {
+    $district = admissionData($item['config_json'])['district'] ?? '';
+    if ($district !== '') {
+        $districts[$district] = $district;
+    }
+}
+sort($districts);
+$totalPeriods = count($periods);
+if ($screen === 'periods') {
+    $search = mb_strtolower(trim(admissionQuery('q')));
+    $districtFilter = admissionQuery('district');
+    $periods = array_values(array_filter($periods, static function (array $item) use ($search, $districtFilter): bool {
+        $configuration = admissionData($item['config_json']);
+        return ($districtFilter === '' || ($configuration['district'] ?? '') === $districtFilter)
+            && ($search === '' || str_contains(mb_strtolower($item['school'] . ' ' . ($configuration['npsn'] ?? '') . ' ' . ($configuration['district'] ?? '')), $search));
+    }));
+}
 if ($application && in_array($screen, ['application', 'receipt'], true)) {
     $statement = $db->prepare("SELECT action, created_at FROM application_events WHERE application_id = ?
         AND action IN ('draft_created', 'draft_saved', 'document_uploaded', 'document_removed', 'submitted') ORDER BY id DESC LIMIT 30");

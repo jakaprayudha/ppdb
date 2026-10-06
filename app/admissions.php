@@ -123,7 +123,8 @@ function ownedProfile(PDO $db, string $id, int $userId): array
 
 function admissionPeriod(PDO $db, string $id): array
 {
-    $statement = $db->prepare('SELECT * FROM admission_periods WHERE id = ?');
+    $statement = $db->prepare('SELECT p.*, COALESCE(v.enabled, 1) AS enabled FROM admission_periods p
+        LEFT JOIN admission_period_availability v ON v.period_id = p.id WHERE p.id = ?');
     $statement->execute([$id]);
     $period = $statement->fetch();
     if (!$period) {
@@ -135,12 +136,18 @@ function admissionPeriod(PDO $db, string $id): array
 
 function periodState(array $period): string
 {
+    if (isset($period['enabled']) && !(int) $period['enabled']) {
+        return 'Diarsipkan';
+    }
     return time() < (int) $period['opens_at'] ? 'Belum dibuka'
         : (time() >= (int) $period['closes_at'] ? 'Ditutup' : 'Pendaftaran dibuka');
 }
 
 function assertPeriodOpen(array $period): void
 {
+    if (isset($period['enabled']) && !(int) $period['enabled']) {
+        throw new AdmissionProblem('Periode diarsipkan dan tidak menerima perubahan atau pendaftaran baru. Data lama tetap dapat dibaca.', 409);
+    }
     if (time() < (int) $period['opens_at'] || time() >= (int) $period['closes_at']) {
         throw new AdmissionProblem('Periode tidak sedang dibuka. Draf tetap tersimpan dan dapat dibaca.', 409);
     }

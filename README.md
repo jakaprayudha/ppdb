@@ -90,6 +90,31 @@ pendaftaran yang sudah dikirim. Data dalam draf dapat diedit tersendiri sebelum 
 Penyimpanan draf, upload, dan pengiriman hanya diizinkan saat jadwal periode terbuka.
 Sesudah tenggat, draf dan tanda terima tetap dapat dibaca.
 
+### Fokus Kabupaten Serdang Bedagai
+
+```sh
+php bin/admissions.php sergai
+```
+
+Perintah development ini menyiapkan **40 periode DEMO untuk SMP negeri umum** di
+Kabupaten Serdang Bedagai. Nama, NPSN, dan kecamatan memakai snapshot
+[Referensi Data Kemendikdasmen](https://referensi.data.kemendikdasmen.go.id/pendidikan/dikdas/072100/2/jf/6/s1)
+tanggal 6 Oktober 2026 yang tersimpan di `data/serdang-bedagai-smp.json`.
+Seluruh 17 halaman kecamatan diperiksa. Daftar per kecamatan juga memuat satu
+Sekolah Rakyat (NPSN 75683280), dicatat dalam snapshot tetapi **tidak dibuatkan periode**
+karena mekanisme penerimaannya khusus.
+
+Nama sekolah merupakan data resmi, tetapi jadwal, checklist, jalur, dan periode tetap
+simulasi. Tidak ada klaim otorisasi dinas, partisipasi sekolah, atau kesesuaian Juknis
+Serdang Bedagai. Kuota dan jadwal nyata masih harus disahkan penyelenggara.
+
+Periode lain, termasuk contoh swasta, diarsipkan dari pilihan baru. Draf/tanda terima
+lama tetap dapat dibaca; periode arsip tidak bisa menerima perubahan, unggahan, atau
+pengiriman baru. Tidak ada akun, pendaftaran, atau dokumen yang dihapus.
+Menjalankan ulang `sergai` tidak menggandakan sekolah dan tidak mengubah jadwal/snapshot
+periode yang sudah ada. Aktivasi daftar dilakukan setelah seluruh sekolah selesai disiapkan.
+Halaman penerimaan menyediakan pencarian nama/NPSN dan filter kecamatan.
+
 ### Template jalur negeri dan swasta
 
 ```sh

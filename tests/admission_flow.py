@@ -464,6 +464,70 @@ class AdmissionFlow(unittest.TestCase):
                 "SELECT count(*) FROM participant_profiles WHERE data_json LIKE '%Peserta Produksi%'"
             ).fetchone()[0], 0)
 
+    def test_z_serdang_bedagai_catalogue_and_archiving(self):
+        profile_id = self.create_profile()
+        archived_app = self.create_application(profile_id)
+        self.assertEqual(self.upload(archived_app)[0], 303)
+        old_document = self.active_document(archived_app)
+        result = self.cli("sergai")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("40 periode", result.stdout)
+        with sqlite3.connect(self.storage / "app.sqlite") as db:
+            active = db.execute("""SELECT p.id, p.config_json FROM admission_periods p
+                JOIN admission_period_availability v ON v.period_id=p.id WHERE v.enabled=1""").fetchall()
+            self.assertEqual(len(active), 40)
+            configurations = [json.loads(raw) for _, raw in active]
+            self.assertEqual(len({item["npsn"] for item in configurations}), 40)
+            self.assertEqual(len({item["district"] for item in configurations}), 17)
+            self.assertTrue(all(item["admission_mode"] == "public_spmb" and item["level"] == "SMP"
+                                and item["regency"] == "Kabupaten Serdang Bedagai" and item["is_demo"]
+                                for item in configurations))
+            self.assertNotIn("75683280", [item["npsn"] for item in configurations])
+            before = db.execute("SELECT id, config_json FROM admission_periods ORDER BY id").fetchall()
+        self.assertEqual(self.cli("sergai").returncode, 0)
+        with sqlite3.connect(self.storage / "app.sqlite") as db:
+            self.assertEqual(before, db.execute("SELECT id, config_json FROM admission_periods ORDER BY id").fetchall())
+        status, body, _ = self.client.request("/admissions")
+        self.assertEqual(status, 200)
+        self.assertEqual(body.count('class="period-card"'), 40)
+        school_cards = "\n".join(re.findall(r'<article class="period-card">(.*?)</article>', body, re.S))
+        self.assertNotIn("SMP Swasta Contoh", school_cards)
+        self.assertNotIn("Sekolah Contoh SMP", school_cards)
+        self.assertIn("40 dari 40", body)
+        status, body, _ = self.client.request("/admissions?district=Sei%20Rampah")
+        self.assertEqual(status, 200)
+        self.assertEqual(body.count('class="period-card"'), 4)
+        self.assertIn("4 dari 40", body)
+        status, body, _ = self.client.request("/admissions?q=10209337")
+        self.assertEqual(status, 200)
+        self.assertEqual(body.count('class="period-card"'), 1)
+        self.assertIn("SMP NEGERI 1 SEI RAMPAH", body)
+        self.assertEqual(self.client.request("/admissions?q=tidak-ada")[1].count('class="period-card"'), 0)
+        self.assertEqual(self.client.request(f"/applications/{archived_app}")[0], 200)
+        self.assertEqual(self.client.raw_request(urllib.request.Request(self.base + "/documents/" + old_document))[0], 200)
+        self.assertEqual(self.post_application(archived_app, 1, "save", self.participant)[0], 409)
+        self.assertEqual(self.upload(archived_app)[0], 409)
+        self.assertEqual(self.post_application(archived_app, 4, "submit", {"declaration": "1"})[0], 409)
+        old_path = "/applications/new?period=" + self.period_id
+        status, body, _ = self.client.request(old_path)
+        self.assertEqual(status, 409)
+        self.assertNotIn("Buat / lanjutkan draf", body)
+        self.assertEqual(self.client.request(old_path, {
+            "csrf": self.client.csrf("/dashboard"), "period_id": self.period_id,
+            "profile_id": profile_id, "pathway": "simulasi"
+        })[0], 409)
+        new_period, _ = active[0]
+        new_path = "/applications/new?period=" + new_period
+        status, body, headers = self.client.request(new_path, {
+            "csrf": self.client.csrf(new_path), "period_id": new_period,
+            "profile_id": profile_id, "pathway": "domisili"
+        })
+        self.assertEqual(status, 303, body)
+        self.assertNotEqual(headers["Location"], "/applications/" + archived_app)
+        self.assertNotEqual(self.cli("sergai", extra_environment={
+            "APP_ENV": "production", "APP_URL": "https://example.test", "MAIL_TRANSPORT": "mail"
+        }).returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

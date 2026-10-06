@@ -64,11 +64,12 @@ function applicationCards(array $applications): void
         <article class="list-card">
             <div><span class="status-tag <?= $item['status'] === 'submitted' ? 'status-submitted' : '' ?>"><?= $item['status'] === 'submitted' ? 'Terkirim · Menunggu verifikasi' : 'Draf' ?></span>
                 <?php if ($item['is_demo']): ?><span class="demo-tag">DEMO</span><?php endif; ?>
+                <?php if (!(int) $item['period_enabled']): ?><span class="status-tag">Periode diarsipkan · hanya baca</span><?php endif; ?>
                 <h3><?= escape($student['name'] ?: 'Peserta belum diisi') ?></h3>
                 <p><?= escape($item['school']) ?> · <?= escape($item['academic_year']) ?></p>
                 <small>Terakhir disimpan: <?= escape(admissionDate((int) $item['updated_at'], $item['timezone'])) ?></small>
             </div>
-            <a class="button button-outline" href="/applications/<?= escape($item['id']) ?><?= $item['status'] === 'submitted' ? '?step=4' : '' ?>"><?= $item['status'] === 'submitted' ? 'Lihat status' : 'Lanjutkan draf' ?> →</a>
+            <a class="button button-outline" href="/applications/<?= escape($item['id']) ?><?= $item['status'] === 'submitted' ? '?step=4' : '' ?>"><?= $item['status'] === 'submitted' ? 'Lihat status' : (!(int) $item['period_enabled'] ? 'Lihat draf arsip' : 'Lanjutkan draf') ?> →</a>
         </article>
         <?php
     }
@@ -149,11 +150,17 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
         <?php if ($profile): ?><div class="notice">Profil tersedia. <a href="/admissions?profile=<?= escape($profile['id']) ?>">Pilih periode penerimaan untuk peserta ini →</a></div><?php endif; ?>
     <?php elseif ($screen === 'periods'): ?>
         <p class="eyebrow">INFORMASI PENERIMAAN</p><h1>Periode penerimaan</h1><p class="lead">Setiap periode berlaku untuk satu sekolah dan satu pilihan. Persyaratan mengikuti konfigurasi penyelenggara, bukan aturan seleksi otomatis.</p>
-        <?php if (!$periods): ?><div class="empty-state"><h2>Belum ada periode penerimaan</h2><p>Pengelola perlu menyiapkan jadwal dan persyaratan melalui konfigurasi admin lokal.</p></div><?php endif; ?>
+        <form method="get" class="form-card search-periods"><input type="hidden" name="profile" value="<?= escape(admissionQuery('profile')) ?>">
+            <div class="form-grid"><div class="field"><label for="q">Cari sekolah / NPSN</label><input id="q" name="q" type="search" value="<?= escape(admissionQuery('q')) ?>" placeholder="Nama sekolah atau NPSN"></div>
+                <div class="field"><label for="district">Kecamatan</label><select id="district" name="district"><option value="">Semua kecamatan</option><?php foreach ($districts as $district): ?><option value="<?= escape($district) ?>"<?= admissionQuery('district') === $district ? ' selected' : '' ?>><?= escape($district) ?></option><?php endforeach; ?></select></div></div>
+            <div class="action-row"><button class="button button-primary compact-button" type="submit">Cari sekolah</button><a class="text-link" href="/admissions?profile=<?= escape(admissionQuery('profile')) ?>">Reset filter</a><span class="field-help"><?= count($periods) ?> dari <?= $totalPeriods ?> periode tersedia</span></div>
+        </form>
+        <?php if (!$periods): ?><div class="empty-state"><h2><?= $totalPeriods ? 'Tidak ada sekolah yang cocok' : 'Belum ada periode penerimaan' ?></h2><p><?= $totalPeriods ? 'Ubah kata pencarian atau reset filter kecamatan.' : 'Pengelola perlu menyiapkan jadwal dan persyaratan melalui konfigurasi admin lokal.' ?></p></div><?php endif; ?>
         <div class="profile-grid"><?php foreach ($periods as $item): $configuration = admissionData($item['config_json']); ?>
             <article class="period-card">
                 <?php if ($item['is_demo']): ?><span class="demo-tag">DEMO · BUKAN PENERIMAAN NYATA</span><?php endif; ?>
                 <span class="status-tag"><?= escape(periodState($item)) ?></span><h2><?= escape($item['school']) ?></h2><p><?= escape($item['organizer']) ?></p><span class="section-badge"><?= escape(admissionModeLabel($configuration)) ?></span>
+                <?php if (isset($configuration['npsn'], $configuration['district'])): ?><p>NPSN <?= escape($configuration['npsn']) ?> · Kec. <?= escape($configuration['district']) ?><br><?= escape($configuration['regency']) ?></p><a class="text-link" href="https://referensi.data.kemendikdasmen.go.id/pendidikan/npsn/<?= escape($configuration['npsn']) ?>" target="_blank" rel="noopener">Profil resmi sekolah ↗</a><?php endif; ?>
                 <dl><dt>Jenjang / tahun ajaran</dt><dd><?= escape($item['level'] . ' · ' . $item['academic_year']) ?></dd><dt>Pendaftaran</dt><dd><?= escape(admissionDate((int) $item['opens_at'], $item['timezone'])) ?><br>sampai <?= escape(admissionDate((int) $item['closes_at'], $item['timezone'])) ?></dd><dt>Jalur tersedia</dt><dd><?= escape(implode(', ', array_column($configuration['pathways'], 'name'))) ?></dd><dt>Rujukan ketentuan</dt><dd><?= escape($configuration['rule_reference']) ?></dd><dt>Bantuan</dt><dd><?= escape($configuration['help_contact']) ?></dd></dl>
                 <?php if (periodState($item) === 'Pendaftaran dibuka'): ?><a class="button button-primary" href="/applications/new?period=<?= escape($item['id']) ?>&amp;profile=<?= escape(admissionQuery('profile')) ?>">Mulai pendaftaran →</a><?php endif; ?>
             </article>
@@ -166,7 +173,7 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
         </div>
         <?php if ($period['is_demo']): ?><div class="demo-banner">Periode DEMO. Jangan mengunggah dokumen atau identitas asli.</div><?php endif; ?>
         <?php if (!$profiles): ?><div class="empty-state"><h2>Tambahkan profil peserta terlebih dahulu</h2><a class="button button-primary compact-button" href="/participants/new">Tambah peserta →</a></div>
-        <?php else: ?>
+        <?php elseif ((int) $period['enabled']): ?>
             <form method="post" class="form-card"><?php admissionCsrf(); ?><input type="hidden" name="period_id" value="<?= escape($period['id']) ?>">
                 <div class="field"><label for="profile_id">Pilih peserta</label><select id="profile_id" name="profile_id" required><option value="">Pilih profil peserta</option><?php foreach ($profiles as $item): ?><option value="<?= escape($item['id']) ?>"<?= $selectedProfile === $item['id'] ? ' selected' : '' ?>><?= escape(admissionData($item['data_json'])['name']) ?></option><?php endforeach; ?></select></div>
                 <div class="field"><label for="pathway">Pilih jalur penerimaan</label><select name="pathway" id="pathway" required><option value="">Pilih jalur</option><?php foreach ($period['configuration']['pathways'] as $item): ?><option value="<?= escape($item['code']) ?>"<?= $selectedPathway === $item['code'] ? ' selected' : '' ?>><?= escape($item['name']) ?></option><?php endforeach; ?></select></div>
