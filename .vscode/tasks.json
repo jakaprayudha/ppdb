@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "SPMB: server lokal",
+			"type": "shell",
+			"command": "php",
+			"args": [
+				"-S",
+				"127.0.0.1:8000",
+				"-t",
+				"public",
+				"public/router.php"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}

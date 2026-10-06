@@ -1,0 +1,6 @@
+/storage/*
+!/storage/.gitkeep
+.DS_Store
+__pycache__/
+*.pyc
+.htaccess
