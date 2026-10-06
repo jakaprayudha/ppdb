@@ -153,13 +153,17 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
         <div class="profile-grid"><?php foreach ($periods as $item): $configuration = admissionData($item['config_json']); ?>
             <article class="period-card">
                 <?php if ($item['is_demo']): ?><span class="demo-tag">DEMO · BUKAN PENERIMAAN NYATA</span><?php endif; ?>
-                <span class="status-tag"><?= escape(periodState($item)) ?></span><h2><?= escape($item['school']) ?></h2><p><?= escape($item['organizer']) ?></p>
+                <span class="status-tag"><?= escape(periodState($item)) ?></span><h2><?= escape($item['school']) ?></h2><p><?= escape($item['organizer']) ?></p><span class="section-badge"><?= escape(admissionModeLabel($configuration)) ?></span>
                 <dl><dt>Jenjang / tahun ajaran</dt><dd><?= escape($item['level'] . ' · ' . $item['academic_year']) ?></dd><dt>Pendaftaran</dt><dd><?= escape(admissionDate((int) $item['opens_at'], $item['timezone'])) ?><br>sampai <?= escape(admissionDate((int) $item['closes_at'], $item['timezone'])) ?></dd><dt>Jalur tersedia</dt><dd><?= escape(implode(', ', array_column($configuration['pathways'], 'name'))) ?></dd><dt>Rujukan ketentuan</dt><dd><?= escape($configuration['rule_reference']) ?></dd><dt>Bantuan</dt><dd><?= escape($configuration['help_contact']) ?></dd></dl>
                 <?php if (periodState($item) === 'Pendaftaran dibuka'): ?><a class="button button-primary" href="/applications/new?period=<?= escape($item['id']) ?>&amp;profile=<?= escape(admissionQuery('profile')) ?>">Mulai pendaftaran →</a><?php endif; ?>
             </article>
         <?php endforeach; ?></div><div class="section-heading"><h2>Pendaftaran Anda</h2></div><?php applicationCards($applications); ?>
     <?php elseif ($screen === 'new-application' && $period): ?>
         <p class="eyebrow">DRAF PENDAFTARAN BARU</p><h1>Mulai pendaftaran</h1><p class="lead"><?= escape($period['school'] . ' · ' . $period['academic_year']) ?></p>
+        <span class="section-badge"><?= escape(admissionModeLabel($period['configuration'])) ?></span>
+        <div class="requirement-note"><h3>Ketentuan pemilihan jalur</h3><p><?= escape($period['configuration']['rule_reference']) ?></p>
+            <?php if (($period['configuration']['admission_mode'] ?? '') === 'public_spmb'): ?><p>Domisili adalah istilah pengganti zonasi. Afirmasi dan mutasi memiliki kategori bukti berbeda. Pilihan jalur tidak berarti kelayakan sudah diverifikasi.</p><?php endif; ?>
+        </div>
         <?php if ($period['is_demo']): ?><div class="demo-banner">Periode DEMO. Jangan mengunggah dokumen atau identitas asli.</div><?php endif; ?>
         <?php if (!$profiles): ?><div class="empty-state"><h2>Tambahkan profil peserta terlebih dahulu</h2><a class="button button-primary compact-button" href="/participants/new">Tambah peserta →</a></div>
         <?php else: ?>

@@ -14,6 +14,23 @@ Buka http://127.0.0.1:8000. Database dan tabel dibuat otomatis di `storage/app.s
 Di VS Code tersedia juga task **SPMB: server lokal** setelah konfigurasi task dibuat.
 Gunakan data uji saja; belum siap untuk penerimaan murid nyata.
 
+### Domain lokal Laravel Herd
+
+Versi PHP CLI dan versi PHP situs Herd bisa berbeda. Situs `ppdb.test` harus memakai
+PHP 8.2+; PHP 8.0 tidak mendukung sintaks modul registrasi. Dari folder proyek:
+
+```sh
+herd isolate 8.4 --site=ppdb
+herd isolated
+```
+
+Perintah ini mengatur versi khusus situs PPDB, bukan versi default semua situs.
+Buka http://ppdb.test/register. Jika sesudah login muncul “Layanan belum tersedia”,
+periksa versi situs dan log Herd; pesan `[SPMB]` mencatat penyebab sebenarnya.
+Aplikasi menolak runtime di bawah PHP 8.2 sejak bootstrap dengan pesan jelas pada log.
+Untuk tautan pemulihan pada domain Herd, atur environment web server
+`APP_URL=http://ppdb.test`; default `APP_URL` tetap alamat server lokal port 8000.
+
 ## Fitur tahap ini
 
 - Register akun wali, login, dashboard akun, logout melalui POST.
@@ -72,6 +89,32 @@ Data profil disalin saat draf dibuat. Mengedit profil tidak mengubah draf atau s
 pendaftaran yang sudah dikirim. Data dalam draf dapat diedit tersendiri sebelum pengiriman.
 Penyimpanan draf, upload, dan pengiriman hanya diizinkan saat jadwal periode terbuka.
 Sesudah tenggat, draf dan tanda terima tetap dapat dibaca.
+
+### Template jalur negeri dan swasta
+
+```sh
+php bin/admissions.php template negeri SMP
+php bin/admissions.php template swasta SMP
+```
+
+Jenjang dapat diganti dengan `SD` atau `SMA`. Perintah membuat periode baru berlabel
+DEMO, bukan mengubah periode simulasi atau pendaftaran yang sudah ada.
+Untuk mencoba jalur baru, buat draf pada periode template yang sesuai.
+
+- Negeri: **Domisili (sebelumnya zonasi), Afirmasi, Prestasi, Mutasi**, berdasarkan
+  baseline [Permendikdasmen No. 3 Tahun 2025](https://peraturan.go.id/files/Permendikdasmen-no-3-tahun-2025.pdf).
+  Template kelas 1 SD tidak menyediakan Prestasi.
+- Swasta mandiri: contoh **Reguler/Mandiri, Prestasi sekolah, Beasiswa/Bantuan biaya**.
+  Bukan daftar nasional wajib; sekolah boleh menyesuaikan. Template SD tidak
+  menyediakan jalur Prestasi, dan tidak membuat tes akademik masuk SD.
+- Bukti afirmasi/mutasi/prestasi mengikuti kategori; satu label alternatif tidak
+  berarti seluruh bukti kategori wajib sekaligus. Checklist demo wajib memakai
+  berkas fiktif dan ditinjau ulang terhadap Juknis/kebijakan sekolah sebelum digunakan.
+- Kuota, batas wilayah, prioritas, seleksi, biaya swasta, dan program bantuan belum
+  diaktifkan. Tidak ada klaim bahwa template memenuhi Juknis daerah tertentu.
+- `admission_mode` opsional untuk konfigurasi lama: `public_spmb` atau
+  `private_independent`. Mode negeri membatasi kode jalur nasional dan menolak
+  Prestasi untuk SD. Mode ini belum menjadi validasi kepatuhan nasional lengkap.
 
 ### Import konfigurasi penyelenggara
 

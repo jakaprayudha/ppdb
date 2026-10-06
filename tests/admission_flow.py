@@ -174,7 +174,12 @@ class AdmissionFlow(unittest.TestCase):
         for contents, filename in [(b"<?php echo 1;", "fake.png"), (b"", "empty.png"), (PNG, "test.html"),
                                    (b"x" * (2 * 1024 * 1024 + 1), "large.png")]:
             with self.subTest(filename=filename):
-                self.assertEqual(self.upload(app_id, contents, filename)[0], 422)
+                status, response, _ = self.upload(app_id, contents, filename)
+                if filename == "large.png":
+                    self.assertIn(status, [413, 422])
+                    self.assertIn("2 MB", response.decode())
+                else:
+                    self.assertEqual(status, 422)
         self.assertEqual(self.upload(app_id, kind="unexpected")[0], 422)
         self.assertEqual(self.upload(app_id)[0], 303)
         first_document = self.active_document(app_id)
@@ -329,6 +334,53 @@ class AdmissionFlow(unittest.TestCase):
             invalid = {**configuration, "code": "invalid-config", **changes}
             path.write_text(json.dumps(invalid))
             self.assertNotEqual(self.cli("import", str(path)).returncode, 0)
+
+    def test_public_and_private_pathway_templates(self):
+        for mode in ["negeri", "swasta"]:
+            for level in ["SD", "SMP", "SMA"]:
+                with self.subTest(mode=mode, level=level):
+                    result = self.cli("template", mode, level)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    with sqlite3.connect(self.storage / "app.sqlite") as db:
+                        period_id, raw = db.execute(
+                            "SELECT id, config_json FROM admission_periods WHERE code=?",
+                            (f"contoh-{mode}-{level.lower()}",)
+                        ).fetchone()
+                    configuration = json.loads(raw)
+                    codes = [item["code"] for item in configuration["pathways"]]
+                    expected = (["domisili", "afirmasi", "mutasi"] if level == "SD"
+                                else ["domisili", "afirmasi", "prestasi", "mutasi"]) if mode == "negeri" else (
+                                    ["reguler", "beasiswa"] if level == "SD" else ["reguler", "prestasi", "beasiswa"])
+                    self.assertEqual(codes, expected)
+                    self.assertTrue(configuration["is_demo"])
+                    self.assertEqual(configuration["admission_mode"],
+                                     "public_spmb" if mode == "negeri" else "private_independent")
+                    self.assertTrue(all(
+                        ("kelulusan" in [doc["code"] for doc in item["documents"]]) == (level != "SD")
+                        for item in configuration["pathways"]
+                    ))
+                    status, body, _ = self.client.request("/applications/new?period=" + period_id)
+                    self.assertEqual(status, 200)
+                    self.assertIn("Negeri · SPMB" if mode == "negeri" else "Swasta · Penerimaan mandiri", body)
+                    self.assertIn("DEMO", body)
+                    if mode == "negeri":
+                        self.assertIn("Domisili adalah istilah pengganti zonasi", body)
+                    self.assertNotEqual(self.cli("template", mode, level).returncode, 0)
+                    if mode == "negeri" and level == "SD":
+                        configuration["code"] = "invalid-sd-prestasi"
+                        configuration["pathways"].append({
+                            "code": "prestasi", "name": "Prestasi", "description": "", "documents": []
+                        })
+                        config_path = Path(self.temp.name) / "invalid-sd.json"
+                        config_path.write_text(json.dumps(configuration))
+                        invalid = self.cli("import", str(config_path))
+                        self.assertNotEqual(invalid.returncode, 0)
+                        self.assertIn("Prestasi tidak berlaku", invalid.stderr)
+        self.assertNotEqual(self.cli("template", "invalid", "SMP").returncode, 0)
+        self.assertNotEqual(self.cli("template", "negeri", "SMK").returncode, 0)
+        self.assertNotEqual(self.cli("template", "negeri", "SMP", extra_environment={
+            "APP_ENV": "production", "APP_URL": "https://example.test", "MAIL_TRANSPORT": "mail"
+        }).returncode, 0)
 
     def test_document_integrity_and_request_limits(self):
         profile_id = self.create_profile()

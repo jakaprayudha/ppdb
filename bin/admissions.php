@@ -9,6 +9,7 @@ if (PHP_SAPI !== 'cli') {
 try {
     require dirname(__DIR__) . '/app/bootstrap.php';
     require dirname(__DIR__) . '/app/admissions.php';
+    require dirname(__DIR__) . '/app/admission_templates.php';
     $command = $argv[1] ?? '';
     if ($command === 'list') {
         foreach ($db->query('SELECT * FROM admission_periods ORDER BY created_at DESC')->fetchAll() as $period) {
@@ -44,6 +45,13 @@ try {
         ];
         $id = insertAdmissionPeriod($db, $configuration);
         echo "Periode DEMO dibuat: $id\n";
+    } elseif ($command === 'template') {
+        if ($config['environment'] !== 'development') {
+            throw new InvalidArgumentException('Template contoh hanya boleh dibuat pada development.');
+        }
+        $configuration = admissionTemplate($argv[2] ?? '', $argv[3] ?? 'SMP', new DateTimeImmutable('now'));
+        $id = insertAdmissionPeriod($db, $configuration);
+        echo "Template contoh dibuat (DEMO): $id\n";
     } elseif ($command === 'import' && isset($argv[2])) {
         if (!is_file($argv[2]) || filesize($argv[2]) > 100000) {
             throw new InvalidArgumentException('File konfigurasi tidak ditemukan atau melebihi 100 KB.');
@@ -55,7 +63,7 @@ try {
         $id = insertAdmissionPeriod($db, admissionData($contents));
         echo "Periode dibuat: $id\n";
     } else {
-        throw new InvalidArgumentException("Penggunaan:\nphp bin/admissions.php demo\nphp bin/admissions.php import /path/periode.json\nphp bin/admissions.php list");
+        throw new InvalidArgumentException("Penggunaan:\nphp bin/admissions.php demo\nphp bin/admissions.php template negeri|swasta SD|SMP|SMA\nphp bin/admissions.php import /path/periode.json\nphp bin/admissions.php list");
     }
 } catch (Throwable $exception) {
     fwrite(STDERR, 'Gagal: ' . $exception->getMessage() . PHP_EOL);

@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+if (PHP_VERSION_ID < 80200) {
+    throw new RuntimeException('PPDB memerlukan PHP 8.2 atau lebih baru. Sesuaikan versi PHP web server untuk situs ini.');
+}
+
 umask(0077);
 
 $environment = getenv('APP_ENV') ?: 'development';

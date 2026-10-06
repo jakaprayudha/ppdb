@@ -387,6 +387,9 @@ function submitApplication(PDO $db, string $id, int $userId, int $version, bool 
 
 function validatePeriodConfiguration(array $input): array
 {
+    if (isset($input['admission_mode']) && !in_array($input['admission_mode'], ['public_spmb', 'private_independent'], true)) {
+        throw new InvalidArgumentException('Mode penerimaan tidak valid.');
+    }
     foreach (['code', 'organizer', 'school', 'level', 'academic_year', 'timezone', 'opens_at', 'closes_at', 'privacy_notice', 'help_contact', 'rule_reference'] as $key) {
         if (!isset($input[$key]) || !is_string($input[$key]) || trim($input[$key]) === '' || mb_strlen($input[$key]) > 3000
             || preg_match('/[\x00-\x1f\x7f]/', $input[$key])) {
@@ -425,6 +428,11 @@ function validatePeriodConfiguration(array $input): array
             throw new InvalidArgumentException('Konfigurasi jalur tidak valid atau kode jalur duplikat.');
         }
         $codes[] = $pathway['code'];
+        if (($input['admission_mode'] ?? '') === 'public_spmb'
+            && (!in_array($pathway['code'], ['domisili', 'afirmasi', 'prestasi', 'mutasi'], true)
+                || ($input['level'] === 'SD' && $pathway['code'] === 'prestasi'))) {
+            throw new InvalidArgumentException('Jalur mode negeri harus domisili, afirmasi, prestasi, atau mutasi. Prestasi tidak berlaku untuk kelas 1 SD.');
+        }
         $documentCodes = [];
         foreach ($pathway['documents'] as $document) {
             if (!is_array($document) || !isset($document['code'], $document['label'], $document['required'])
@@ -438,6 +446,15 @@ function validatePeriodConfiguration(array $input): array
     }
     $input['version'] = 1;
     return $input;
+}
+
+function admissionModeLabel(array $configuration): string
+{
+    return match ($configuration['admission_mode'] ?? '') {
+        'public_spmb' => 'Negeri · SPMB',
+        'private_independent' => 'Swasta · Penerimaan mandiri',
+        default => 'Mode belum ditetapkan',
+    };
 }
 
 function insertAdmissionPeriod(PDO $db, array $configuration): string
