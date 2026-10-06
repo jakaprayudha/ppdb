@@ -2,6 +2,11 @@
 declare(strict_types=1);
 
 require __DIR__ . '/admissions.php';
+if ($path === '/participants/location') {
+    require __DIR__ . '/location.php';
+    handleLocationRequest($db, $config, (int) $user['id']);
+    exit;
+}
 
 function admissionQuery(string $key): string
 {

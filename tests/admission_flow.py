@@ -104,6 +104,14 @@ class AdmissionFlow(unittest.TestCase):
         self.assertEqual(status, 303, body)
         return headers["Location"].split("/")[-1]
 
+    def test_location_service_not_configured(self):
+        status, body, _ = self.client.request("/participants/location", {
+            "csrf": self.client.csrf("/participants/new"),
+            "location_consent": "1", "latitude": "3.5", "longitude": "99.1"
+        })
+        self.assertEqual(status, 503, body)
+        self.assertIn("belum dikonfigurasi", json.loads(body)["error"])
+
     def create_application(self, profile_id, period_id=None):
         path = "/applications/new?period=" + (period_id or self.period_id)
         status, body, headers = self.client.request(path, {
@@ -491,6 +499,17 @@ class AdmissionFlow(unittest.TestCase):
         """
         result = subprocess.run(
             [shutil.which("php"), "-r", code, session_id, csrf],
+            cwd=ROOT, env=environment, capture_output=True, text=True, timeout=10
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("STATUS=403", result.stdout)
+        self.assertIn("belum dibuka untuk data nyata", result.stdout)
+        location_code = code.replace("'/participants/new'", "'/participants/location'").replace(
+            "require 'public/index.php';",
+            "$_POST += ['location_consent' => '1', 'latitude' => '3.5', 'longitude' => '99.1']; require 'public/index.php';"
+        )
+        result = subprocess.run(
+            [shutil.which("php"), "-r", location_code, session_id, csrf],
             cwd=ROOT, env=environment, capture_output=True, text=True, timeout=10
         )
         self.assertEqual(result.returncode, 0, result.stderr)

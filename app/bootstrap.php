@@ -48,6 +48,7 @@ $config = [
     'storage' => $storage,
     'mail_transport' => $mailTransport,
     'mail_from' => getenv('MAIL_FROM') ?: 'noreply@example.test',
+    'geocoding_url' => getenv('GEOCODING_URL') ?: '',
 ];
 
 ini_set('display_errors', '0');

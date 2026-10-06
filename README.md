@@ -97,6 +97,60 @@ pendaftaran yang sudah dikirim. Data dalam draf dapat diedit tersendiri sebelum 
 Penyimpanan draf, upload, dan pengiriman hanya diizinkan saat jadwal periode terbuka.
 Sesudah tenggat, draf dan tanda terima tetap dapat dibaca.
 
+### Ambil lokasi pada profil peserta
+
+Formulir tambah/edit profil menyediakan tombol **Ambil lokasi** untuk mengisi
+provinsi, kabupaten/kota, kecamatan, desa/kelurahan, dan kode pos. Fitur memerlukan
+persetujuan pengguna, izin lokasi browser, serta HTTPS (atau localhost).
+`http://ppdb.test` bukan secure context; gunakan HTTPS Herd untuk GPS.
+Lokasi perangkat harus berada di domisili peserta, bukan lokasi wali saat bepergian.
+Hasil bukan bukti domisili atau verifikasi kelayakan jalur.
+
+Atur `GEOCODING_URL` pada environment PHP web server ke endpoint reverse-geocoding
+**internal/self-hosted yang dikelola sendiri**, bukan layanan pihak ketiga.
+Default kosong: aplikasi menjelaskan layanan belum dikonfigurasi dan tidak meminta
+GPS. URL hanya ditentukan pengelola, tidak menerima URL dari pengguna, tidak boleh
+mengandung kredensial/query/fragment, dan redirect layanan tidak diikuti.
+PHP memerlukan `allow_url_fopen`; gunakan HTTPS untuk koneksi selain loopback.
+Layanan internal harus menyediakan endpoint/adaptor dengan kontrak:
+
+```http
+POST /reverse
+Content-Type: application/json
+
+{"latitude":3.5,"longitude":99.1}
+```
+
+Respons sukses HTTP 200 (maksimal 32 KiB):
+
+```json
+{
+  "country_code": "id",
+  "province": "Provinsi Uji",
+  "city": "Kabupaten Uji",
+  "district": "Kecamatan Uji",
+  "village": "Desa Uji",
+  "postal_code": "12345"
+}
+```
+
+`country_code` wajib; hanya Indonesia diterima. Wilayah yang tidak ditemukan
+dapat bernilai string kosong atau tidak disertakan. Kode pos harus lima digit jika
+tersedia. Jika memakai Nominatim self-hosted, sediakan adaptor yang memetakan
+hierarki administratif Indonesia ke kontrak ini; respons mentah Nominatim tidak
+langsung kompatibel. Jangan menebak desa/kode pos dari level administrasi lain.
+Data dan layanan geocoding harus tersedia dahulu agar fitur benar-benar aktif.
+
+Browser mengirim koordinat melalui POST ke aplikasi dan aplikasi meneruskannya
+ke layanan internal tanpa identitas peserta. Koordinat tidak disimpan pada profil,
+database, atau audit aplikasi; pengelola harus menonaktifkan logging body pada
+proxy/layanan internal juga. Maksimal 15 permintaan per akun dalam 15 menit.
+Hasil hanya mengganti kolom wilayah yang ditemukan, menandai perubahan belum
+tersimpan, dan menampilkan kolom yang masih perlu diisi/diperiksa manual.
+Alamat jalan/nomor rumah tidak diganti. Tetap tekan **Simpan profil**; draf
+pendaftaran yang sudah dibuat tidak diubah. Fitur diblokir pada produksi seperti
+perubahan modul registrasi lainnya.
+
 ### Fokus Kabupaten Serdang Bedagai
 
 ```sh

@@ -70,6 +70,7 @@ class AuthFlow(unittest.TestCase):
             os.environ, APP_ENV="development", APP_URL=cls.base,
             APP_STORAGE=str(cls.storage), MAIL_TRANSPORT="file"
         )
+        environment.update(getattr(cls, "server_environment", {}))
         cls.process = subprocess.Popen(
             [php, "-S", f"127.0.0.1:{port}", "-t", "public", "public/router.php"],
             cwd=ROOT, env=environment, stdout=cls.log, stderr=cls.log

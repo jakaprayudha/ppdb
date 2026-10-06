@@ -143,7 +143,19 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
         <p class="eyebrow">PROFIL CALON PESERTA DIDIK</p><h1><?= escape($title) ?></h1><p class="lead">Nama wajib untuk menyimpan profil. Isian lain boleh dilengkapi nanti; kelengkapan akan diperiksa saat pendaftaran dikirim.</p>
         <form method="post" class="form-card" data-draft-form><?php admissionCsrf(); ?><?php if ($profile): admissionVersion((int) $profile['version']); endif; ?>
             <h2>Identitas peserta</h2><div class="form-grid"><?php foreach ($studentKeys as $key): participantField($key, $data, $errors); endforeach; ?></div>
-            <h2>Orang tua / wali dan alamat</h2><div class="form-grid"><?php foreach ($guardianKeys as $key): participantField($key, $data, $errors); endforeach; ?></div>
+            <h2>Orang tua / wali</h2>
+            <div class="form-grid"><?php foreach (array_slice($guardianKeys, 0, 3) as $key): participantField($key, $data, $errors); endforeach; ?></div>
+            <h2>Alamat domisili peserta</h2>
+            <div class="requirement-note location-control" data-location-control data-location-ready="<?= $config['geocoding_url'] !== '' ? 'true' : 'false' ?>">
+                <div class="location-control-header">
+                    <div><h3>Isi wilayah dari lokasi perangkat</h3><p>Gunakan saat berada di domisili peserta. Hasil lokasi bukan bukti domisili atau dasar penentuan jalur penerimaan.</p></div>
+                    <button type="button" class="button button-outline location-button" data-get-location aria-describedby="location-status" <?= $config['environment'] === 'production' ? 'disabled' : '' ?>>Ambil lokasi</button>
+                </div>
+                <div class="privacy-check"><input type="checkbox" id="location-consent" data-location-consent><label for="location-consent">Saya mengizinkan koordinat lokasi dikirim ke layanan internal pengelola untuk mencari alamat. Koordinat tidak disimpan pada profil.</label></div>
+                <p class="field-help location-status" id="location-status" role="status" aria-live="polite" data-location-status><?= $config['environment'] === 'production' ? 'Pengambilan lokasi dinonaktifkan selama registrasi produksi belum dibuka.' : ($config['geocoding_url'] === '' ? 'Layanan lokasi internal belum dikonfigurasi. Alamat masih dapat diisi manual.' : 'Perlu HTTPS atau localhost dan izin lokasi browser. Hasil mengganti kolom wilayah yang ditemukan; periksa sebelum menyimpan.') ?></p>
+                <noscript><p>Aktifkan JavaScript untuk mengambil lokasi, atau isi alamat secara manual.</p></noscript>
+            </div>
+            <div class="form-grid"><?php foreach (array_slice($guardianKeys, 3) as $key): participantField($key, $data, $errors); endforeach; ?></div>
             <p class="field-help">Gunakan tombol simpan. Perubahan profil tidak otomatis disalin ke draf yang sudah dibuat.</p>
             <div class="form-actions"><a class="button button-outline" href="/participants">Kembali</a><button class="button button-primary compact-button" type="submit">Simpan profil →</button></div>
         </form>
