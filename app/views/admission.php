@@ -87,7 +87,7 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
 <div class="portal-topbar">
 <header class="dashboard-header">
     <a class="brand" href="/dashboard"><span class="brand-mark" aria-hidden="true">P</span><span>PPDB<span class="brand-caption">LAYANAN PENDIDIKAN</span></span></a>
-    <div class="header-actions"><span class="role-tag">Akun wali</span><form method="post" action="/logout"><?php admissionCsrf(); ?><button class="button button-outline" type="submit">Keluar</button></form></div>
+    <div class="header-actions"><a class="role-tag" href="/account/security">Akun wali</a><form method="post" action="/logout"><?php admissionCsrf(); ?><button class="button button-outline" type="submit">Keluar</button></form></div>
 </header>
 <nav class="portal-nav" aria-label="Navigasi pendaftar">
     <a href="/dashboard"<?= $screen === 'dashboard' ? ' aria-current="page"' : '' ?>>Beranda</a>

@@ -96,11 +96,12 @@ function currentUser(PDO $db): ?array
         flash('Sesi berakhir. Silakan masuk kembali.');
         return null;
     }
-    $statement = $db->prepare('SELECT u.id, u.name, u.email, COALESCE(a.role, u.role) AS role, u.auth_version
-        FROM users u LEFT JOIN admin_accounts a ON a.user_id = u.id WHERE u.id = ?');
+    $statement = $db->prepare('SELECT u.id, u.name, u.email, COALESCE(a.role, s.role, u.role) AS role, u.auth_version,
+        COALESCE(s.enabled, 1) AS enabled FROM users u LEFT JOIN admin_accounts a ON a.user_id = u.id
+        LEFT JOIN staff_accounts s ON s.user_id = u.id WHERE u.id = ?');
     $statement->execute([$_SESSION['user_id']]);
     $user = $statement->fetch();
-    if (!$user || (int) $user['auth_version'] !== $_SESSION['auth_version']) {
+    if (!$user || !(int) $user['enabled'] || (int) $user['auth_version'] !== $_SESSION['auth_version']) {
         unset($_SESSION['user_id'], $_SESSION['auth_version'], $_SESSION['last_active'], $_SESSION['signed_in_at']);
         flash('Sesi tidak berlaku lagi. Silakan masuk kembali.');
         return null;
@@ -161,6 +162,14 @@ function sendResetEmail(array $config, string $email, string $token): void
     $body = "Kami menerima permintaan untuk mengganti password akun SPMB Anda.\n\n"
         . "Buka tautan berikut dalam 30 menit:\n$link\n\n"
         . "Tautan hanya dapat digunakan sekali. Jika bukan Anda yang meminta, abaikan email ini.\n";
+    sendAccountEmail($config, $email, $subject, $body);
+}
+
+function sendAccountEmail(array $config, string $email, string $subject, string $body): void
+{
+    if (!validEmail($email)) {
+        throw new RuntimeException('Alamat penerima email tidak valid.');
+    }
     if ($config['mail_transport'] === 'file') {
         $path = $config['storage'] . '/mail/' . time() . '-' . bin2hex(random_bytes(8)) . '.eml';
         $contents = "To: $email\nSubject: $subject\nContent-Type: text/plain; charset=UTF-8\n\n$body";

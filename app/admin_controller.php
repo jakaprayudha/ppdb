@@ -3,6 +3,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/admissions.php';
 require __DIR__ . '/admin.php';
+if ($path === '/admin/accounts' || str_starts_with($path, '/admin/accounts/')) {
+    require __DIR__ . '/staff_controller.php';
+    exit;
+}
 if ($path === '/admin/master-data' || str_starts_with($path, '/admin/master-data/')) {
     require __DIR__ . '/master_controller.php';
     exit;
@@ -28,23 +32,28 @@ $periods = [];
 $rows = [];
 $total = 0;
 $stats = [];
-$adminAllowed = $user['role'] === 'central_admin' && $config['environment'] === 'development';
+$assignment = null;
+$reviewers = [];
+$adminAllowed = isStaff($user) && $config['environment'] === 'development';
 
 try {
     if (!$adminAllowed) {
-        throw new AdmissionProblem($user['role'] === 'central_admin'
+        throw new AdmissionProblem(isStaff($user)
             ? 'Portal admin belum dibuka pada produksi. MFA dan persetujuan operasional diperlukan.'
-            : 'Halaman ini hanya untuk admin pusat.', 403);
+            : 'Halaman ini hanya untuk staf yang ditugaskan.', 403);
     }
     $screens = ['/admin' => 'dashboard', '/admin/applications' => 'applications', '/admin/master-data' => 'master',
         '/admin/accounts' => 'accounts', '/admin/audit' => 'audit'];
     $screen = $screens[$path] ?? 'not-found';
     if (preg_match('~\A/admin/applications/([a-f0-9]{32})\z~', $path, $matches)) {
         $screen = 'review';
-        $application = adminApplication($db, $matches[1]);
+        $application = adminApplication($db, $matches[1], $user);
     }
     if ($screen === 'not-found') {
         throw new AdmissionProblem('Halaman tidak ditemukan.', 404);
+    }
+    if ($screen === 'audit') {
+        requireCentral($db, (int) $user['id']);
     }
     if ($screen === 'applications' && $invalidPage) {
         throw new AdmissionProblem('Nomor halaman tidak valid.', 422);
@@ -64,12 +73,25 @@ try {
             if (!validCsrf()) {
                 throw new AdmissionProblem('Sesi formulir tidak valid. Muat ulang halaman.', 419);
             }
-            $version = filter_var(input('verification_version'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
-            if ($version === false) {
-                throw new AdmissionProblem('Versi verifikasi tidak valid. Muat ulang halaman.', 409);
+            if (input('action') === 'assign') {
+                $reviewer = filter_var(input('reviewer_id'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+                $version = filter_var(input('assignment_version'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+                if ($reviewer === false || $version === false) {
+                    throw new AdmissionProblem('Penugasan/versi tidak valid. Muat ulang peserta.', 409);
+                }
+                assignVerifier($db, $user, $application['id'], $reviewer, $version);
+                flash('Penugasan verifikator tersimpan.');
+            } else {
+                if (!in_array(input('action'), ['', 'verify'], true)) {
+                    throw new AdmissionProblem('Aksi pemeriksaan tidak valid.', 422);
+                }
+                $version = filter_var(input('verification_version'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+                if ($version === false) {
+                    throw new AdmissionProblem('Versi verifikasi tidak valid. Muat ulang halaman.', 409);
+                }
+                verifyApplication($db, (int) $user['id'], $application['id'], $version, $decision, $note);
+                flash('Keputusan verifikasi tersimpan dan dapat dilihat wali. Ini bukan keputusan penerimaan.');
             }
-            verifyApplication($db, (int) $user['id'], $application['id'], $version, $decision, $note);
-            flash('Keputusan verifikasi tersimpan dan dapat dilihat wali. Ini bukan keputusan penerimaan.');
             redirect($path);
         }
     }
@@ -82,16 +104,23 @@ try {
 }
 
 if ($adminAllowed) {
-    $periods = $db->query('SELECT p.*, MIN(COALESCE(v.enabled, 1), COALESCE(s.enabled, 1)) AS enabled FROM admission_periods p
+    [$periodScope, $periodParams] = staffScope($user, 'l.school_id');
+    $statement = $db->prepare('SELECT p.*, MIN(COALESCE(v.enabled, 1), COALESCE(s.enabled, 1)) AS enabled FROM admission_periods p
         LEFT JOIN admission_period_availability v ON v.period_id = p.id LEFT JOIN period_school_links l ON l.period_id=p.id
-        LEFT JOIN master_schools s ON s.id=l.school_id ORDER BY p.school COLLATE NOCASE')->fetchAll();
+        LEFT JOIN master_schools s ON s.id=l.school_id WHERE (' . $periodScope . ') ORDER BY p.school COLLATE NOCASE');
+    $statement->execute($periodParams);
+    $periods = $statement->fetchAll();
+    [$applicationScope, $scopeParams] = staffScope($user, 'l.school_id', 'a.id');
     if ($screen === 'dashboard') {
-        $stats = $db->query("SELECT COUNT(*) AS total, SUM(a.status = 'draft') AS drafts,
+        $statement = $db->prepare("SELECT COUNT(*) AS total, SUM(a.status = 'draft') AS drafts,
             SUM(a.status = 'submitted') AS submitted,
             SUM(a.status = 'submitted' AND v.status IS NULL) AS pending,
             SUM(v.status = 'valid') AS valid, SUM(v.status = 'needs_correction') AS needs_correction,
             SUM(v.status = 'invalid') AS invalid FROM applications a
-            LEFT JOIN application_verifications v ON v.application_id = a.id")->fetch();
+            JOIN period_school_links l ON l.period_id=a.period_id
+            LEFT JOIN application_verifications v ON v.application_id = a.id WHERE ($applicationScope)");
+        $statement->execute($scopeParams);
+        $stats = $statement->fetch();
     }
     if ($screen === 'applications') {
         if ($invalidPage) {
@@ -101,8 +130,8 @@ if ($adminAllowed) {
             http_response_code(422);
             $errors['form'] = 'Filter verifikasi tidak valid.';
         } else {
-            $where = ["a.status = 'submitted'"];
-            $parameters = [];
+            $where = ["a.status = 'submitted'", '(' . $applicationScope . ')'];
+            $parameters = $scopeParams;
             if ($query !== '') {
                 $where[] = '(instr(lower(a.registration_number), lower(?)) > 0 OR instr(lower(a.data_json), lower(?)) > 0)';
                 array_push($parameters, $query, $query);
@@ -118,6 +147,7 @@ if ($adminAllowed) {
                 $parameters[] = $statusFilter;
             }
             $from = ' FROM applications a JOIN admission_periods p ON p.id = a.period_id
+                JOIN period_school_links l ON l.period_id=a.period_id
                 LEFT JOIN application_verifications v ON v.application_id = a.id WHERE ' . implode(' AND ', $where);
             $statement = $db->prepare('SELECT COUNT(*)' . $from);
             $statement->execute($parameters);
@@ -129,6 +159,17 @@ if ($adminAllowed) {
         }
     }
     if ($screen === 'review' && $application) {
+        $statement = $db->prepare('SELECT va.*,u.name AS reviewer_name FROM verification_assignments va
+            LEFT JOIN users u ON u.id=va.reviewer_id WHERE va.application_id=?');
+        $statement->execute([$application['id']]);
+        $assignment = $statement->fetch() ?: null;
+        if (in_array($user['role'], ['central_admin', 'school_admin'], true)) {
+            $statement = $db->prepare("SELECT u.id,u.name FROM staff_accounts s JOIN users u ON u.id=s.user_id
+                JOIN staff_schools ss ON ss.user_id=s.user_id JOIN period_school_links l ON l.school_id=ss.school_id
+                WHERE s.enabled=1 AND s.role='verifier' AND l.period_id=? ORDER BY u.name,u.id");
+            $statement->execute([$application['period_id']]);
+            $reviewers = $statement->fetchAll();
+        }
         $verification = applicationVerification($db, $application['id']);
         $statement = $db->prepare('SELECT h.*, u.name AS reviewer_name FROM verification_history h JOIN users u ON u.id = h.reviewer_id
             WHERE h.application_id = ? ORDER BY h.id DESC LIMIT 50');
@@ -138,9 +179,6 @@ if ($adminAllowed) {
             $decision = $verification['status'] ?? '';
             $note = $verification['note'] ?? '';
         }
-    }
-    if ($screen === 'accounts') {
-        $rows = $db->query('SELECT u.name, u.email, a.role, a.created_at FROM admin_accounts a JOIN users u ON u.id = a.user_id ORDER BY a.created_at DESC')->fetchAll();
     }
     if ($screen === 'audit') {
         $rows = $db->query('SELECT e.action, e.created_at, u.name FROM audit_events e LEFT JOIN users u ON u.id = e.user_id

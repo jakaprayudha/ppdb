@@ -12,8 +12,9 @@ function verificationLabel(?string $status): string
     };
 }
 
-function adminApplication(PDO $db, string $id): array
+function adminApplication(PDO $db, string $id, array $user): array
 {
+    authorizeStaffApplication($db, $user, $id);
     $statement = $db->prepare("SELECT a.*, p.school, p.academic_year, p.timezone, u.name AS guardian_account, u.email AS guardian_email
         FROM applications a JOIN admission_periods p ON p.id = a.period_id JOIN users u ON u.id = a.user_id
         WHERE a.id = ? AND a.status = 'submitted'");
@@ -35,12 +36,7 @@ function verifyApplication(PDO $db, int $reviewerId, string $id, int $expectedVe
         throw new AdmissionProblem('Catatan wajib 5–2000 karakter dan aman ditampilkan kepada wali.', 422);
     }
     admissionTransaction($db, function () use ($db, $reviewerId, $id, $expectedVersion, $status, $note): void {
-        $role = $db->prepare("SELECT 1 FROM admin_accounts WHERE user_id = ? AND role = 'central_admin'");
-        $role->execute([$reviewerId]);
-        if (!$role->fetchColumn()) {
-            throw new AdmissionProblem('Akses admin pusat diperlukan.', 403);
-        }
-        adminApplication($db, $id);
+        adminApplication($db, $id, staffIdentity($db, $reviewerId));
         $statement = $db->prepare('SELECT version FROM application_verifications WHERE application_id = ?');
         $statement->execute([$id]);
         $version = (int) $statement->fetchColumn();

@@ -46,6 +46,32 @@ function database(string $storage): PDO
             role TEXT NOT NULL CHECK (role = 'central_admin'),
             created_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS staff_accounts (
+            user_id INTEGER PRIMARY KEY REFERENCES users(id),
+            role TEXT NOT NULL CHECK (role IN ('school_admin', 'verifier')),
+            enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+            can_approve INTEGER NOT NULL DEFAULT 0 CHECK (can_approve IN (0, 1)),
+            version INTEGER NOT NULL DEFAULT 1,
+            created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS account_security (
+            user_id INTEGER PRIMARY KEY REFERENCES users(id),
+            email_verified_at INTEGER,
+            mfa_secret TEXT,
+            last_counter INTEGER NOT NULL DEFAULT -1
+        );
+        CREATE TABLE IF NOT EXISTS email_verifications (
+            token_hash TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            expires_at INTEGER NOT NULL,
+            used_at INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS mfa_recovery_codes (
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            code_hash TEXT NOT NULL,
+            used_at INTEGER,
+            PRIMARY KEY (user_id, code_hash)
+        );
     SQL);
     $db->exec(<<<'SQL'
         CREATE TABLE IF NOT EXISTS admission_periods (
@@ -150,6 +176,36 @@ function database(string $storage): PDO
         CREATE TABLE IF NOT EXISTS period_school_links (
             period_id TEXT PRIMARY KEY REFERENCES admission_periods(id),
             school_id TEXT NOT NULL REFERENCES master_schools(id)
+        );
+        CREATE TABLE IF NOT EXISTS staff_schools (
+            user_id INTEGER NOT NULL REFERENCES staff_accounts(user_id),
+            school_id TEXT NOT NULL REFERENCES master_schools(id) ON DELETE CASCADE,
+            PRIMARY KEY (user_id, school_id)
+        );
+        CREATE TABLE IF NOT EXISTS staff_invitations (
+            id TEXT PRIMARY KEY,
+            email TEXT NOT NULL,
+            name TEXT NOT NULL,
+            role TEXT NOT NULL CHECK (role IN ('school_admin', 'verifier')),
+            can_approve INTEGER NOT NULL CHECK (can_approve IN (0, 1)),
+            token_hash TEXT NOT NULL UNIQUE,
+            expires_at INTEGER NOT NULL,
+            used_at INTEGER,
+            cancelled_at INTEGER,
+            created_by INTEGER NOT NULL REFERENCES users(id),
+            created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS invitation_schools (
+            invitation_id TEXT NOT NULL REFERENCES staff_invitations(id),
+            school_id TEXT NOT NULL REFERENCES master_schools(id) ON DELETE CASCADE,
+            PRIMARY KEY (invitation_id, school_id)
+        );
+        CREATE TABLE IF NOT EXISTS verification_assignments (
+            application_id TEXT PRIMARY KEY REFERENCES applications(id),
+            reviewer_id INTEGER REFERENCES staff_accounts(user_id),
+            version INTEGER NOT NULL DEFAULT 1,
+            assigned_by INTEGER NOT NULL REFERENCES users(id),
+            updated_at INTEGER NOT NULL
         );
         CREATE TABLE IF NOT EXISTS period_management (
             period_id TEXT PRIMARY KEY REFERENCES admission_periods(id),

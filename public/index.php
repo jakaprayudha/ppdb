@@ -5,6 +5,16 @@ try {
     require dirname(__DIR__) . '/app/bootstrap.php';
     $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/';
     $user = currentUser($db);
+    if (in_array($path, ['/staff/accept', '/account/security', '/account/verify-email'], true)) {
+        require dirname(__DIR__) . '/app/account_controller.php';
+        exit;
+    }
+    if ($user
+        && ($path === '/dashboard' || preg_match('~\A/(admin|participants|admissions|applications|documents)(/|$)~', $path))
+        && ((isStaff($user) && $config['environment'] === 'development' && !staffPortalReady($db, $config, $user))
+            || !accountMfaReady($db, $user))) {
+        redirect('/account/security');
+    }
     if ($path === '/admin' || str_starts_with($path, '/admin/')) {
         if (!$user) {
             redirect('/login');
@@ -16,7 +26,7 @@ try {
         if (!$user) {
             redirect('/login');
         }
-        if ($user['role'] === 'central_admin' && !str_starts_with($path, '/documents/')) {
+        if (isStaff($user) && !str_starts_with($path, '/documents/')) {
             redirect('/admin');
         }
         require dirname(__DIR__) . '/app/admission_controller.php';
@@ -115,12 +125,13 @@ try {
                     $errors['password'] = 'Isi password yang valid.';
                 }
                 if (!$errors) {
-                    $statement = $db->prepare('SELECT * FROM users WHERE email = ?');
+                    $statement = $db->prepare('SELECT u.*, COALESCE(s.enabled,1) AS enabled FROM users u
+                        LEFT JOIN staff_accounts s ON s.user_id=u.id WHERE u.email = ?');
                     $statement->execute([$values['email']]);
                     $account = $statement->fetch();
                     $dummyHash = password_hash('dummy-password-not-an-account', PASSWORD_DEFAULT);
                     $verified = password_verify(input('password'), $account ? $account['password_hash'] : $dummyHash);
-                    if (!$account || !$verified) {
+                    if (!$account || !$verified || !(int) $account['enabled']) {
                         audit($db, 'auth.login_failed');
                         $errors['form'] = 'Email atau password tidak sesuai.';
                     } else {

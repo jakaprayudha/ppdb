@@ -12,6 +12,7 @@ import urllib.request
 import admission_flow as admission_helpers
 import auth_flow as auth_helpers
 from auth_flow import Client, ROOT
+from staff_helpers import complete_central_security
 
 
 class AdminFlow(unittest.TestCase):
@@ -23,6 +24,7 @@ class AdminFlow(unittest.TestCase):
             cls.stop_server()
             raise RuntimeError(cls.seed.stderr)
         cls.admin_password = re.search(r"Password: (.+)", cls.seed.stdout).group(1)
+        cls.central_security = {}
 
     cli = classmethod(admission_helpers.AdmissionFlow.cli.__func__)
     stop_server = classmethod(auth_helpers.AuthFlow.stop_server.__func__)
@@ -47,6 +49,7 @@ class AdminFlow(unittest.TestCase):
         admission_helpers.AdmissionFlow.setUp(self)
         self.admin = admission_helpers.AdmissionClient(self.base)
         self.assertEqual(self.login(self.admin, "admin.pusat@example.test", self.admin_password)[0], 303)
+        complete_central_security(self)
 
     def submit_fixture(self):
         app_id = self.create_application(self.create_profile())

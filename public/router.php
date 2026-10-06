@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$assets = ['/assets/app.css', '/assets/app.js'];
+$assets = ['/assets/app.css', '/assets/app.js', '/assets/master.js'];
 if (is_string($path) && in_array($path, $assets, true)) {
     return false;
 }

@@ -116,7 +116,7 @@ try {
         }
     }
     if ($screen === 'document') {
-        $adminDocumentAccess = $user['role'] === 'central_admin';
+        $adminDocumentAccess = isStaff($user);
         if ($adminDocumentAccess && $config['environment'] !== 'development') {
             throw new AdmissionProblem('Akses dokumen admin belum dibuka pada produksi.', 403);
         }
@@ -126,6 +126,9 @@ try {
         $document = $statement->fetch();
         if (!$document) {
             throw new AdmissionProblem('Dokumen tidak ditemukan.', 404);
+        }
+        if ($adminDocumentAccess) {
+            authorizeStaffApplication($db, $user, $document['application_id']);
         }
         $file = $config['storage'] . '/documents/' . $document['storage_name'];
         if (!is_file($file) || hash_file('sha256', $file) !== $document['sha256']) {

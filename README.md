@@ -4,7 +4,8 @@ PHP, HTML, CSS, JavaScript vanilla, dan SQLite. Tidak memerlukan Composer atau n
 
 ## Menjalankan secara lokal
 
-Persyaratan: PHP 8.2+ dengan ekstensi `pdo_sqlite`, `mbstring`, dan `fileinfo`.
+Persyaratan: PHP 8.2+ dengan ekstensi `pdo_sqlite`, `mbstring`, `fileinfo`, dan
+`openssl` (enkripsi secret MFA staf).
 
 ```sh
 php -S 127.0.0.1:8000 -t public public/router.php
@@ -59,11 +60,13 @@ tetap terlihat saat halaman pendaftar digulir, dan disembunyikan saat mencetak.
 Nama instansi, logo, dan wilayah
 penyelenggara belum ditetapkan; lengkapi identitas dan otorisasi penyelenggara sebelum publikasi.
 
-Register publik tidak memberikan akses panitia. Admin pusat tersedia untuk
-pengujian lokal; tenancy sekolah, pemisahan tugas staf, dan MFA masih diperlukan
-sebelum portal panitia dibuka pada produksi.
-Email belum diverifikasi; verifikasi kepemilikan email wajib ditambahkan sebelum data
-pendaftaran nyata dikaitkan ke akun.
+Register publik tidak memberikan akses panitia. Admin pusat, admin sekolah dan
+verifikator tersedia untuk pengujian lokal dengan pembatasan sekolah/penugasan.
+2FA opsional untuk staf dan wali, nonaktif secara default. Kepemilikan email staf diverifikasi lewat undangan atau tautan
+verifikasi untuk admin lama. Wali dapat memverifikasi email melalui tautan **Akun
+wali** di header; verifikasi email wali belum menjadi syarat alur pilot, tetapi
+wajib dijadikan gate sebelum data nyata dikaitkan ke akun. Pemisahan approver dan
+persetujuan keputusan/aturan belum tersedia.
 **Seluruh perubahan pada modul registrasi diblokir pada `APP_ENV=production`.**
 Modul ini adalah pilot pengembangan, bukan layanan penerimaan pemerintah yang siap dibuka.
 
@@ -119,6 +122,9 @@ php bin/admin.php seed
 Perintah khusus development membuat akun uji `admin.pusat@example.test` dengan
 password acak yang ditampilkan sekali di terminal. Masuk melalui `/login`;
 akun diarahkan ke `/admin`. Simpan password secara privat, bukan di source code.
+Sebelum portal terbuka, akun baru maupun admin lama diarahkan ke
+`/account/security` hanya jika email belum terverifikasi atau 2FA yang dipilih
+pengguna sudah aktif dan sesi belum lolos challenge. Setup 2FA tidak dipaksakan.
 Pengulangan tidak mereset password atau mempromosikan akun wali yang kebetulan
 memakai email tersebut. Jika lupa, gunakan pemulihan password. Tidak ada akun
 admin yang dibuat otomatis saat aplikasi dijalankan.
@@ -134,7 +140,11 @@ Admin pusat memiliki akses **seluruh sekolah**, bukan hanya satu sekolah:
   termasuk periode diarsipkan. Dropdown **Periode pendaftaran / Sekolah** membuka
   tabel masing-masing dengan pencarian, pagination 10 baris, detail, tambah, edit,
   hapus terkonfirmasi, dan arsip/aktivasi.
-- **Akun admin:** daftar admin pusat hanya-baca; pembuatan akun uji lewat CLI.
+- **Akun & akses:** daftar admin pusat hanya-baca, undangan staf, daftar staf
+  dengan pencarian/pagination 10 baris, edit peran, beberapa sekolah,
+  aktif/nonaktif dan pembatalan undangan. Khusus admin pusat.
+- **Profil akun:** verifikasi email, pilihan aktif/nonaktif 2FA, pengaturan/challenge MFA dan penggantian
+  autentikator menggunakan password serta sesi yang sudah lolos MFA.
 - **Audit:** 100 aktivitas terakhir; akses dokumen admin dan keputusan dicatat.
 
 Catatan verifikasi wajib 5–2000 karakter, terlihat oleh wali pada status dan
@@ -145,13 +155,82 @@ aturan tidak diubah. **Perlu perbaikan belum membuka kunci atau pengiriman ulang
 wali diminta menghubungi panitia. Koreksi terkontrol merupakan tahap berikutnya.
 Admin dapat memeriksa pendaftaran terkirim dari periode diarsipkan juga.
 
-Peran disimpan pada tabel grant `admin_accounts` yang hanya dikelola CLI,
-terpisah dari akun wali; seluruh data pengguna lama dipertahankan tanpa membangun
-ulang tabel `users`. Register mengabaikan kiriman role. Pemeriksaan akses server
-berlaku untuk semua halaman admin dan dokumen (admin hanya dokumen aktif dari
-pendaftaran terkirim). Tidak ada promosi role lewat UI atau pengeditan data peserta
-oleh admin. **Portal admin, verifikasi, dan akses dokumen admin diblokir pada
-produksi** sampai MFA, email verification, dasar kewenangan dan operasional siap.
+Grant pusat tetap pada `admin_accounts`, dikelola CLI. Staf pada `staff_accounts`
+dan `staff_schools`; akun/peserta lama tetap utuh tanpa membangun ulang `users`.
+Register mengabaikan role dari klien. Undangan tidak mempromosikan akun wali atau
+admin yang sudah ada. **Portal admin, verifikasi, aktivasi undangan dan akses
+dokumen staf masih diblokir pada produksi** sampai aturan, kewenangan, privasi,
+pengamanan berkas dan operasional dinyatakan siap; adanya MFA tidak membuka gate.
+
+### Tahap 1: akun staf dan akses sekolah
+
+| Peran | Hak yang tersedia |
+|---|---|
+| Admin pusat | Kelola akun/master, dashboard seluruh sekolah, penugasan verifikator, pemeriksaan peserta dan audit global. Akun pusat tidak dapat dibuat/diubah lewat formulir staf. |
+| Admin sekolah | Dashboard/daftar/pemeriksaan peserta terkirim serta penugasan verifikator pada sekolah yang ditugaskan. Tidak boleh mengubah master, mengelola akun atau membaca audit global. |
+| Verifikator | Dashboard/daftar/pemeriksaan hanya peserta terkirim yang ditugaskan kepadanya, pada sekolah yang termasuk grant aktifnya. |
+
+Satu staf dapat menangani beberapa sekolah. Pembatasan berlaku pada query
+dashboard/filter/pagination, GET detail, POST keputusan/penugasan dan unduh
+dokumen, bukan hanya menu. Draf tidak dibuka untuk pemeriksaan. Verifikator
+aktif dari sekolah peserta dapat dipilih pada **Penugasan verifikator** di detail
+peserta oleh admin pusat/sekolah; konflik versi penugasan ditolak.
+Menu ekspor belum tersedia dan tidak ditambahkan sebagai placeholder.
+
+Alur penggunaan:
+
+1. Admin lama: buka **Profil akun → Kirim tautan verifikasi**. Dengan
+   `MAIL_TRANSPORT=file`, tautan berada di berkas `.eml` privat terbaru dalam
+   `APP_STORAGE/mail/`; ini bukan email yang dikirim ke internet. Buka tautan,
+   lalu klik **Verifikasi email**. Jangan menaruh tautan/token pada source code.
+2. Opsional: pilih **Atur 2FA** pada pengaturan profil akun. Tambahkan secret secara manual ke aplikasi autentikator TOTP (6 digit,
+   30 detik, SHA-1), konfirmasikan password dan kode. Secret pengaturan berlaku
+   10 menit. Simpan delapan kode pemulihan yang ditampilkan sekali secara privat.
+   Membuka pengaturan tidak membuat secret; setup dapat dibatalkan, dan 2FA baru
+   aktif setelah password dan kode berhasil dikonfirmasi.
+   Aksi aktivasi/batal diberi jarak terpisah; tombol memenuhi lebar formulir pada
+   ponsel, dan tautan kembali berada di luar kartu dengan jarak yang jelas.
+3. Buka **Akun & akses**, masukkan nama/email staf tersendiri, pilih admin
+   sekolah/verifikator dan minimal satu sekolah, lalu **Kirim undangan**.
+   Transport file menyimpan undangan di folder mail privat; transport mail
+   membutuhkan MTA/relay. Kegagalan pengiriman menghasilkan kesalahan, bukan sukses.
+4. Staf membuka undangan setelah keluar dari akun lain, membuat password sendiri,
+   membaca privasi dan mengaktifkan akun. Token berlaku 24 jam, sekali pakai;
+   GET tidak mengonsumsi token. Aktivasi membuktikan kepemilikan email, lalu staf
+   login tanpa wajib mengatur 2FA sebelum melihat data admin.
+5. Jika 2FA diaktifkan, login berikutnya memerlukan kode autentikator atau kode pemulihan
+   sekali pakai. Kode TOTP yang telah dipakai tidak dapat diputar ulang.
+6. Edit akses/peran atau nonaktifkan staf melalui **Edit akses**. Semua sesi staf
+   dicabut dan penugasan pesertanya dilepas; lakukan penugasan ulang bila perlu.
+   Keputusan/dokumen peserta lama tidak dihapus. Aktivasi kembali tidak
+   mengembalikan sesi atau penugasan otomatis. Penghapusan sekolah yang belum
+   dipakai juga mencabut sesi staf terdampak dan membatalkan undangan terkait.
+
+2FA dapat dinonaktifkan melalui pengaturan profil akun dengan password, konfirmasi
+dan sesi yang sudah lolos challenge 2FA. Secret/kode pemulihan serta sesi lain
+dicabut, perubahan diaudit; login berikutnya tidak meminta kode. Akun yang telah
+mengaktifkan 2FA tidak dinonaktifkan otomatis oleh perubahan kebijakan ini.
+Jika perangkat diganti/hilang tetapi
+kode pemulihan tersedia, login menggunakan satu kode, buka **Ganti autentikator**,
+konfirmasikan password/pencabutan, lalu enroll ulang. Secret/kode lama dan sesi
+lain dicabut. Jika perangkat dan seluruh kode pemulihan hilang, pemulihan
+privileged belum disediakan; jangan menghapus tabel atau menonaktifkan gate.
+
+Tombol **Lewati 2FA untuk pengujian** dihapus karena 2FA kini pilihan akun.
+Flag sesi pengujian lama tidak dapat melewati challenge akun yang 2FA-nya aktif.
+Verifikasi email staf, izin sekolah/penugasan dan gate produksi tidak berubah.
+
+Secret MFA dienkripsi AES-256-GCM di database; kuncinya `APP_STORAGE/mfa.key`
+dibuat privat di luar folder publik. Token undangan/verifikasi dan kode pemulihan
+disimpan sebagai hash, tidak dimasukkan audit. **Backup privat harus mencakup
+database, dokumen, dan kunci MFA**; jangan mengganti/menghapus kunci saat restore.
+Jangan mengunggah storage ke version control. Untuk akun yang mengaktifkan 2FA,
+sesi yang belum lolos challenge tidak bisa mengakses dashboard/data/dokumen
+walaupun password sudah benar; berlaku untuk staf maupun wali.
+
+Penanda **Calon approver** terpisah dari peran dasar dan hanya persiapan grant:
+belum memberi hak menerbitkan aturan/hasil. Pemisahan pengaju/pengesah baru akan
+diberlakukan saat modul persetujuan dibangun.
 
 ### CRUD master sekolah dan periode
 
@@ -435,19 +514,24 @@ Tes master mencakup CRUD, NPSN/kode duplikat, validasi jalur/jadwal, pencarian d
 pagination, konflik versi, propagasi identitas sekolah sebelum dipakai, arsip
 sekolah/periode, blokir hapus/edit setelah dipakai (termasuk draf dibatalkan), dan
 proteksi akses admin/produksi.
+Tes staf mencakup undangan valid/batal/kedaluwarsa/sekali pakai, kolisi email
+tanpa promosi wali, email verification/CSRF, MFA/replay/rate limit, hash recovery,
+enkripsi secret, rotasi autentikator, penugasan beberapa sekolah, akses GET/POST/
+dokumen lintas sekolah, pembatasan verifikator, konflik versi dan pencabutan sesi.
 
 ## Berikutnya
 
 ### Roadmap admin-first
 
-**Ini backlog, bukan fitur yang sudah aktif.** Saat ini tersedia dashboard,
-verifikasi dasar, master sekolah/periode, daftar akun pusat hanya-baca dan audit
-100 aktivitas terakhir. Rincian scope, prasyarat, kriteria penerimaan, rancangan
+**A-01 sudah tersedia untuk pengujian development**: undangan staf, grant sekolah,
+MFA/email verification, pengelolaan akun dan pencabutan sesi. Penugasan verifikator
+dasar dari A-03 juga tersedia; pengelolaan antrean lengkap belum. Tahap lain tetap
+backlog, bukan fitur aktif. Rincian scope, prasyarat, kriteria penerimaan, rancangan
 menu dan keputusan kebijakan ada di [PRD bagian 15.1](prd.md#151-roadmap-lanjutan-admin-terlebih-dahulu).
 
 | Prioritas | Improvement | Hasil yang dituju |
 |---|---|---|
-| 1 / A-01 | Akun, peran & akses sekolah | Undangan staf, penugasan sekolah, izin aksi, pencabutan akses/sesi, MFA staf dan verifikasi email. |
+| 1 / A-01 | Akun, peran & akses sekolah (tersedia pada development) | Undangan staf, penugasan sekolah, izin aksi, pencabutan akses/sesi, MFA staf dan verifikasi email. Approver hanya penanda persiapan. |
 | 2 / A-02 | Master operasional & aturan | Tahun ajaran, rombel, daya tampung, kuota jalur, jadwal tiap tahap, Juknis, versi dan persetujuan paket aturan. |
 | 3 / A-03 | Pendaftar & antrean | Tabel/filter/sort, penugasan verifikator, antrean kerja dan tinjauan potensi duplikasi. |
 | 4 / A-04 | Verifikasi rinci & koreksi | Checklist per berkas/kriteria, permintaan perbaikan terbatas, tenggat, revisi dan kirim ulang tanpa menimpa snapshot awal. |
@@ -460,12 +544,11 @@ menu dan keputusan kebijakan ada di [PRD bagian 15.1](prd.md#151-roadmap-lanjuta
 | 11 / A-11 | Operasional & gate produksi | Audit berfilter, monitoring, backup/restore, retensi, pemindaian unggahan dan uji beban/akses. |
 | 12 / A-12 | Perluasan opsional | Pilihan lintas sekolah, geodata/jarak, swasta/gelombang, tes/beasiswa/pembayaran yang sah dan integrasi resmi berizin. |
 
-**Mulai dari A-01: Akun & akses sekolah.** Sepakati matriks kewenangan admin
-pusat/admin sekolah/verifikator/approver, tambahkan grant secara aditif, bangun
-undangan dan penugasan staf, lalu terapkan izin yang sama pada daftar, detail,
-POST, dokumen, statistik, audit dan ekspor. Uji sekolah A tidak dapat mengakses
-sekolah B, register wali tidak menaikkan role, pencabutan akses membatalkan sesi,
-serta undangan/CSRF/konflik versi. Jangan langsung membangun ranking sebelum
+**Berikutnya A-02: master operasional, kuota/jadwal/aturan berversi.** Pembagian
+akses A-01 sudah mengikuti keputusan: pusat mengelola akun/master, admin sekolah
+menugaskan/memeriksa di sekolahnya, verifikator hanya peserta yang ditugaskan;
+satu staf boleh beberapa sekolah. Otorisasi ekspor dan persetujuan harus memakai
+scope ini ketika modulnya dibuat. Jangan langsung membangun ranking sebelum
 aturan dan data verifikasi siap.
 
 Setelah fondasi akses selesai, lanjut **A-02 kuota/jadwal/aturan**, lalu

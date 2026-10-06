@@ -76,5 +76,7 @@ if ($environment === 'production') {
 
 require __DIR__ . '/database.php';
 require __DIR__ . '/auth.php';
+require __DIR__ . '/staff.php';
+require __DIR__ . '/account_security.php';
 
 $db = database($storage);

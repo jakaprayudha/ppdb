@@ -56,6 +56,7 @@ function saveMasterSchool(PDO $db, ?string $id, int $actor, array $data, ?int $v
 {
     $data = validateMasterSchool($data);
     return admissionTransaction($db, function () use ($db, $id, $actor, $data, $version): string {
+        requireCentral($db, $actor);
         if ($id) {
             $school = masterSchool($db, $id);
             if ((int) $school['version'] !== $version) {
@@ -101,6 +102,7 @@ function saveMasterSchool(PDO $db, ?string $id, int $actor, array $data, ?int $v
 function saveMasterPeriod(PDO $db, ?string $id, int $actor, string $schoolId, array $rules, ?int $version): string
 {
     return admissionTransaction($db, function () use ($db, $id, $actor, $schoolId, $rules, $version): string {
+        requireCentral($db, $actor);
         $school = masterSchool($db, $schoolId);
         if (!(int) $school['enabled']) {
             throw new AdmissionProblem('Sekolah diarsipkan. Aktifkan sekolah sebelum membuat/mengedit periode.', 409);
@@ -151,6 +153,7 @@ function saveMasterPeriod(PDO $db, ?string $id, int $actor, string $schoolId, ar
 function masterAction(PDO $db, string $type, string $id, int $actor, int $version, string $action): void
 {
     admissionTransaction($db, function () use ($db, $type, $id, $actor, $version, $action): void {
+        requireCentral($db, $actor);
         $item = $type === 'schools' ? masterSchool($db, $id) : masterPeriod($db, $id);
         if ((int) $item[$type === 'schools' ? 'version' : 'management_version'] !== $version) {
             throw new AdmissionProblem('Data telah berubah. Muat ulang sebelum melanjutkan.', 409);
@@ -166,6 +169,12 @@ function masterAction(PDO $db, string $type, string $id, int $actor, int $versio
                 throw new AdmissionProblem('Konfirmasi penghapusan diperlukan.', 422);
             }
             if ($type === 'schools') {
+                $db->prepare('UPDATE users SET auth_version=auth_version+1 WHERE id IN
+                    (SELECT user_id FROM staff_schools WHERE school_id=?)')->execute([$id]);
+                $db->prepare('UPDATE staff_accounts SET version=version+1 WHERE user_id IN
+                    (SELECT user_id FROM staff_schools WHERE school_id=?)')->execute([$id]);
+                $db->prepare('UPDATE staff_invitations SET cancelled_at=? WHERE used_at IS NULL AND cancelled_at IS NULL
+                    AND id IN (SELECT invitation_id FROM invitation_schools WHERE school_id=?)')->execute([time(), $id]);
                 $db->prepare('DELETE FROM master_schools WHERE id=?')->execute([$id]);
             } else {
                 foreach (['period_school_links', 'period_management', 'admission_period_availability'] as $table) {
