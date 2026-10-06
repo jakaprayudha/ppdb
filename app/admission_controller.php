@@ -53,8 +53,8 @@ if ($path === '/dashboard') {
     $screen = 'periods';
 } elseif ($path === '/applications/new') {
     $screen = 'new-application';
-} elseif (preg_match('~\A/applications/([a-f0-9]{32})(/receipt)?\z~', $path, $matches)) {
-    $screen = isset($matches[2]) ? 'receipt' : 'application';
+} elseif (preg_match('~\A/applications/([a-f0-9]{32})(/(receipt|cancel))?\z~', $path, $matches)) {
+    $screen = $matches[3] ?? 'application';
     $applicationId = $matches[1];
 } elseif (preg_match('~\A/documents/([a-f0-9]{32})\z~', $path, $matches)) {
     $screen = 'document';
@@ -62,7 +62,7 @@ if ($path === '/dashboard') {
 }
 
 try {
-    $allowed = in_array($screen, ['profile', 'new-application', 'application'], true) ? ['GET', 'POST'] : ['GET'];
+    $allowed = in_array($screen, ['profile', 'new-application', 'application', 'cancel'], true) ? ['GET', 'POST'] : ['GET'];
     if (!in_array($method, $allowed, true)) {
         header('Allow: ' . implode(', ', $allowed));
         throw new AdmissionProblem('Metode permintaan tidak didukung.', 405);
@@ -90,7 +90,7 @@ try {
             throw new AdmissionProblem('Periode diarsipkan. Pilih periode SMP negeri yang tersedia.', 409);
         }
     }
-    if (in_array($screen, ['application', 'receipt'], true)) {
+    if (in_array($screen, ['application', 'receipt', 'cancel'], true)) {
         $application = ownedApplication($db, $applicationId, $userId);
         $period = admissionPeriod($db, $application['period_id']);
         if ($application['status'] === 'submitted') {
@@ -107,6 +107,9 @@ try {
         $readonly = $application['status'] !== 'draft' || periodState($period) !== 'Pendaftaran dibuka' || $config['environment'] === 'production';
         if ($screen === 'receipt' && $application['status'] !== 'submitted') {
             throw new AdmissionProblem('Tanda terima tersedia setelah pendaftaran dikirim.', 409);
+        }
+        if ($screen === 'cancel' && $application['status'] !== 'draft') {
+            throw new AdmissionProblem('Pendaftaran sudah dikirim dan tidak dapat dibatalkan melalui penghapusan draf.', 409);
         }
     }
     if ($screen === 'document') {
@@ -140,6 +143,14 @@ try {
         }
         if ($config['environment'] === 'production') {
             throw new AdmissionProblem('Modul registrasi masih tahap pengembangan dan belum dibuka untuk data nyata.', 403);
+        }
+        if ($screen === 'cancel') {
+            if (input('confirm_cancel') !== '1') {
+                throw new AdmissionProblem('Konfirmasi penghapusan draf diperlukan.', 422);
+            }
+            cancelApplication($db, $config['storage'], $applicationId, $userId, postedVersion());
+            flash('Draf pendaftaran dan seluruh berkasnya telah dihapus. Profil peserta tetap tersedia.');
+            redirect('/admissions');
         }
         if ($screen === 'profile') {
             $data = participantInput();
@@ -216,7 +227,7 @@ try {
 } catch (AdmissionProblem $exception) {
     http_response_code($exception->status);
     $errors = ['form' => $exception->getMessage()] + $exception->fields;
-    if ($exception->status === 404 || $screen === 'document') {
+    if ($exception->status === 404 || $screen === 'document' || ($screen === 'cancel' && $exception->status === 503)) {
         $screen = 'not-found';
     }
 }

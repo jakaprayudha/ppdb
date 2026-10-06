@@ -252,6 +252,41 @@ function saveApplicationStep(PDO $db, string $id, int $userId, int $version, int
     });
 }
 
+function cleanupCancelledDocuments(PDO $db, string $storage): void
+{
+    // Queue survives crashes between committing cancellation and deleting physical files.
+    admissionTransaction($db, function () use ($db, $storage): void {
+        $names = $db->query('SELECT storage_name FROM document_deletion_queue')->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($names as $name) {
+            if (!preg_match('/\A[a-f0-9]{32}\.(pdf|jpg|png)\z/', $name)) {
+                throw new RuntimeException('Nama berkas antrean penghapusan tidak valid.');
+            }
+            $path = $storage . '/documents/' . $name;
+            if ((file_exists($path) || is_link($path)) && !unlink($path)) {
+                error_log('[PPDB] Cancelled document cleanup failed.');
+                throw new AdmissionProblem('Draf sudah dibatalkan, tetapi penghapusan berkas belum selesai. Hubungi pengelola untuk menjalankan pembersihan ulang.', 503);
+            }
+            $db->prepare('DELETE FROM document_deletion_queue WHERE storage_name = ?')->execute([$name]);
+        }
+    });
+}
+
+function cancelApplication(PDO $db, string $storage, string $id, int $userId, int $version): void
+{
+    admissionTransaction($db, function () use ($db, $id, $userId, $version): void {
+        $application = ownedApplication($db, $id, $userId);
+        assertDraft($application, $version);
+        $db->prepare('INSERT INTO document_deletion_queue (storage_name, created_at)
+            SELECT storage_name, ? FROM application_documents WHERE application_id = ?')
+            ->execute([time(), $id]);
+        $db->prepare('DELETE FROM application_documents WHERE application_id = ?')->execute([$id]);
+        $db->prepare('DELETE FROM application_events WHERE application_id = ?')->execute([$id]);
+        $db->prepare('DELETE FROM applications WHERE id = ?')->execute([$id]);
+        audit($db, 'admission.draft_cancelled', $userId);
+    });
+    cleanupCancelledDocuments($db, $storage);
+}
+
 function storeApplicationDocument(PDO $db, array $config, string $id, int $userId, int $version, string $kind, array $file): void
 {
     $error = $file['error'] ?? UPLOAD_ERR_NO_FILE;

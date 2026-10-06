@@ -51,7 +51,7 @@ function participantSummary(array $data): void
     echo '</dl>';
 }
 
-function applicationCards(array $applications): void
+function applicationCards(array $applications, bool $canCancel): void
 {
     if (!$applications) {
         echo '<div class="empty-state"><h3>Belum ada pendaftaran</h3><p>Tambahkan profil peserta, lalu pilih periode penerimaan untuk membuat draf.</p><a class="text-link" href="/admissions">Lihat periode penerimaan →</a></div>';
@@ -69,7 +69,10 @@ function applicationCards(array $applications): void
                 <p><?= escape(admissionDisplayText($item['school'])) ?> · <?= escape($item['academic_year']) ?></p>
                 <small>Terakhir disimpan: <?= escape(admissionDate((int) $item['updated_at'], $item['timezone'])) ?></small>
             </div>
-            <a class="button button-outline" href="/applications/<?= escape($item['id']) ?><?= $item['status'] === 'submitted' ? '?step=4' : '' ?>"><?= $item['status'] === 'submitted' ? 'Lihat status' : (!(int) $item['period_enabled'] ? 'Lihat draf arsip' : 'Lanjutkan draf') ?> →</a>
+            <div class="application-card-actions">
+                <a class="button button-outline" href="/applications/<?= escape($item['id']) ?><?= $item['status'] === 'submitted' ? '?step=4' : '' ?>"><?= $item['status'] === 'submitted' ? 'Lihat status' : (!(int) $item['period_enabled'] ? 'Lihat draf arsip' : 'Lanjutkan draf') ?> →</a>
+                <?php if ($canCancel && $item['status'] === 'draft'): ?><a class="button button-outline button-danger" href="/applications/<?= escape($item['id']) ?>/cancel" aria-label="Batal pendaftaran <?= escape($student['name'] ?: 'Peserta belum diisi') ?>">Batal</a><?php endif; ?>
+            </div>
         </article>
         <?php
     }
@@ -80,6 +83,7 @@ $pageTitles = [
     'dashboard' => 'Beranda pendaftar', 'participants' => 'Profil peserta', 'profile' => $profile ? 'Edit profil peserta' : 'Tambah profil peserta',
     'periods' => 'Periode penerimaan', 'new-application' => 'Mulai pendaftaran', 'application' => 'Formulir pendaftaran',
     'receipt' => 'Tanda terima pendaftaran', 'not-found' => 'Halaman tidak tersedia',
+    'cancel' => 'Batalkan draf pendaftaran',
 ];
 $title = $pageTitles[$screen];
 $studentKeys = ['name', 'nisn', 'sex', 'birth_place', 'birth_date', 'source_school'];
@@ -91,6 +95,7 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
     <title><?= escape($title) ?> — PPDB</title><link rel="stylesheet" href="/assets/app.css"><script src="/assets/app.js" defer></script></head>
 <body class="dashboard-page">
 <a class="skip-link" href="#main">Lewati ke konten</a>
+<div class="portal-topbar">
 <header class="dashboard-header">
     <a class="brand" href="/dashboard"><span class="brand-mark" aria-hidden="true">P</span><span>PPDB<span class="brand-caption">LAYANAN PENDIDIKAN</span></span></a>
     <div class="header-actions"><span class="role-tag">Akun wali</span><form method="post" action="/logout"><?php admissionCsrf(); ?><button class="button button-outline" type="submit">Keluar</button></form></div>
@@ -98,9 +103,10 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
 <nav class="portal-nav" aria-label="Navigasi pendaftar">
     <a href="/dashboard"<?= $screen === 'dashboard' ? ' aria-current="page"' : '' ?>>Beranda</a>
     <a href="/participants"<?= in_array($screen, ['participants', 'profile'], true) ? ' aria-current="page"' : '' ?>>Profil peserta</a>
-    <a href="/admissions"<?= in_array($screen, ['periods', 'new-application', 'application', 'receipt'], true) ? ' aria-current="page"' : '' ?>>Pendaftaran</a>
+    <a href="/admissions"<?= in_array($screen, ['periods', 'new-application', 'application', 'receipt', 'cancel'], true) ? ' aria-current="page"' : '' ?>>Pendaftaran</a>
     <a href="/privacy">Privasi</a>
 </nav>
+</div>
 <main id="main" class="dashboard-main admission-main">
     <?php if ($config['environment'] === 'production'): ?><div class="demo-banner">Modul registrasi belum dibuka untuk data nyata. Perubahan data dinonaktifkan pada produksi.</div>
     <?php else: ?><div class="demo-banner"><strong>Lingkungan pengembangan.</strong> Gunakan identitas dan dokumen uji, bukan data pribadi anak yang sebenarnya.</div><?php endif; ?>
@@ -130,7 +136,7 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
             <aside class="account-card"><h2>Informasi akun wali</h2><dl><dt>Nama</dt><dd><?= escape($user['name']) ?></dd><dt>Email</dt><dd><?= escape($user['email']) ?></dd></dl>
                 <p class="account-note">Data profil disalin saat draf dibuat. Perubahan profil tidak mengubah pendaftaran yang sudah dibuat atau dikirim.</p></aside>
         </div>
-        <div class="section-heading"><h2>Pendaftaran Anda</h2><a class="text-link" href="/admissions">Lihat periode →</a></div><?php applicationCards($applications); ?>
+        <div class="section-heading"><h2>Pendaftaran Anda</h2><a class="text-link" href="/admissions">Lihat periode →</a></div><?php applicationCards($applications, $config['environment'] !== 'production'); ?>
     <?php elseif ($screen === 'participants'): ?>
         <div class="section-heading"><div><p class="eyebrow">DATA CALON PESERTA DIDIK</p><h1>Profil peserta</h1></div><a class="button button-primary compact-button" href="/participants/new">Tambah peserta +</a></div>
         <p class="lead">Lengkapi data secara bertahap. Data profil disalin ke draf pendaftaran saat Anda memilih periode.</p>
@@ -176,7 +182,21 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
                 <dl><dt>Jenjang / tahun ajaran</dt><dd><?= escape($item['level'] . ' · ' . $item['academic_year']) ?></dd><dt>Pendaftaran</dt><dd><?= escape(admissionDate((int) $item['opens_at'], $item['timezone'])) ?><br>sampai <?= escape(admissionDate((int) $item['closes_at'], $item['timezone'])) ?></dd><dt>Jalur tersedia</dt><dd><?= escape(implode(', ', array_column($configuration['pathways'], 'name'))) ?></dd><dt>Rujukan ketentuan</dt><dd><?= escape($configuration['rule_reference']) ?></dd><dt>Bantuan</dt><dd><?= escape($configuration['help_contact']) ?></dd></dl>
                 <?php if (periodState($item) === 'Pendaftaran dibuka'): ?><a class="button button-primary" href="/applications/new?period=<?= escape($item['id']) ?>&amp;profile=<?= escape(admissionQuery('profile')) ?>">Mulai pendaftaran →</a><?php endif; ?>
             </article>
-        <?php endforeach; ?></div><div class="section-heading"><h2>Pendaftaran Anda</h2></div><?php applicationCards($applications); ?>
+        <?php endforeach; ?></div><div class="section-heading"><h2>Pendaftaran Anda</h2></div><?php applicationCards($applications, $config['environment'] !== 'production'); ?>
+    <?php elseif ($screen === 'cancel' && $application && $period): ?>
+        <p class="eyebrow">KONFIRMASI PEMBATALAN</p><h1>Batalkan draf pendaftaran</h1>
+        <section class="form-card">
+            <h2><?= escape($data['name'] ?: 'Peserta belum diisi') ?></h2>
+            <p class="lead"><?= escape($period['school'] . ' · ' . $period['academic_year']) ?></p>
+            <p>Data registrasi, riwayat draf, dan seluruh berkas unggahan (termasuk berkas yang pernah diganti atau dihapus dari checklist) akan dihapus permanen. Tindakan ini tidak dapat dipulihkan.</p>
+            <p>Profil peserta tetap tersedia. Anda dapat membuat draf baru jika periode penerimaan masih dibuka.</p>
+            <?php if ($application['status'] === 'draft' && $config['environment'] !== 'production'): ?>
+                <form method="post"><?php admissionCsrf(); admissionVersion((int) $application['version']); ?>
+                    <div class="privacy-check"><input type="checkbox" id="confirm-cancel" name="confirm_cancel" value="1" required><label for="confirm-cancel">Saya memahami dan menyetujui penghapusan permanen draf beserta seluruh berkasnya.</label></div>
+                    <div class="form-actions"><a class="button button-outline" href="/admissions">Kembali tanpa membatalkan</a><button type="submit" class="button button-outline button-danger">Ya, hapus draf pendaftaran</button></div>
+                </form>
+            <?php else: ?><a class="button button-outline" href="/admissions">Kembali ke pendaftaran</a><?php endif; ?>
+        </section>
     <?php elseif ($screen === 'new-application' && $period): ?>
         <p class="eyebrow">DRAF PENDAFTARAN BARU</p><h1>Mulai pendaftaran</h1><p class="lead"><?= escape($period['school'] . ' · ' . $period['academic_year']) ?></p>
         <span class="section-badge"><?= escape(admissionModeLabel($period['configuration'])) ?></span>

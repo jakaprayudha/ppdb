@@ -222,6 +222,12 @@ class AdmissionFlow(unittest.TestCase):
         self.assertEqual(status, 303, body)
         self.assertTrue(headers["Location"].endswith("/receipt"))
         submitted = self.application(app_id)
+        cancel_path = f"/applications/{app_id}/cancel"
+        self.assertEqual(self.client.request(cancel_path)[0], 409)
+        self.assertEqual(self.client.request(cancel_path, {
+            "csrf": self.client.csrf("/participants/new"), "confirm_cancel": "1",
+            "version": submitted["version"]
+        })[0], 409)
         self.assertEqual(submitted["status"], "submitted")
         self.assertRegex(submitted["registration_number"], r"^PPDB-\d{4}-[A-F0-9]{32}$")
         self.assertIsNotNone(submitted["rule_snapshot_json"])
@@ -248,6 +254,87 @@ class AdmissionFlow(unittest.TestCase):
         self.assertIn("Dokumen identitas", receipt)
         self.assertEqual(self.application(app_id)["rule_snapshot_json"], submitted["rule_snapshot_json"])
         self.assertIn("Peserta Contoh", self.client.request("/dashboard")[1])
+
+    def test_cancel_draft_deletes_all_files_and_preserves_profile(self):
+        profile_id = self.create_profile()
+        app_id = self.create_application(profile_id)
+        self.assertEqual(self.upload(app_id)[0], 303)
+        self.assertEqual(self.upload(app_id, filename="replacement.png")[0], 303)
+        document_id = self.active_document(app_id)
+        with sqlite3.connect(self.storage / "app.sqlite") as db:
+            files = [self.storage / "documents" / row[0] for row in db.execute(
+                "SELECT storage_name FROM application_documents WHERE application_id=?", (app_id,)
+            )]
+        self.assertTrue(all(path.exists() for path in files))
+        for route in ["/dashboard", "/admissions"]:
+            self.assertIn(f"/applications/{app_id}/cancel", self.client.request(route)[1])
+        path = f"/applications/{app_id}/cancel"
+        version = self.application(app_id)["version"]
+        self.assertEqual(self.client.request(path)[0], 200)
+        self.assertIsNotNone(self.application(app_id))
+        csrf = self.client.csrf(path)
+        payload = {"csrf": csrf, "version": version, "confirm_cancel": "1"}
+        self.assertEqual(self.client.request(path, {**payload, "csrf": "invalid"})[0], 419)
+        self.assertEqual(self.client.request(path, {**payload, "confirm_cancel": "0"})[0], 422)
+        self.assertEqual(self.client.request(path, {**payload, "version": version - 1})[0], 409)
+        outsider = Client(self.base)
+        self.assertEqual(outsider.request("/register", {
+            "csrf": outsider.csrf("/register"), "name": "Wali Lain",
+            "email": "cancel-outsider@example.test", "password": "password-uji-awal-123",
+            "password_confirmation": "password-uji-awal-123", "privacy": "1"
+        })[0], 303)
+        self.assertEqual(self.login(outsider, "cancel-outsider@example.test")[0], 303)
+        self.assertEqual(outsider.request(path)[0], 404)
+        self.assertEqual(outsider.request(path, {
+            **payload, "csrf": outsider.csrf("/participants/new")
+        })[0], 404)
+        with sqlite3.connect(self.storage / "app.sqlite") as db:
+            db.execute("INSERT OR REPLACE INTO admission_period_availability(period_id, enabled) VALUES (?, 0)",
+                       (self.period_id,))
+        try:
+            status, body, headers = self.client.request(path, payload)
+            self.assertEqual(status, 303, body)
+            self.assertEqual(headers["Location"], "/admissions")
+            with sqlite3.connect(self.storage / "app.sqlite") as db:
+                for table in ["applications", "application_documents", "application_events"]:
+                    column = "id" if table == "applications" else "application_id"
+                    self.assertEqual(db.execute(f"SELECT count(*) FROM {table} WHERE {column}=?", (app_id,)).fetchone()[0], 0)
+                self.assertEqual(db.execute("SELECT count(*) FROM participant_profiles WHERE id=?", (profile_id,)).fetchone()[0], 1)
+                self.assertEqual(db.execute("SELECT count(*) FROM document_deletion_queue").fetchone()[0], 0)
+            self.assertTrue(all(not file.exists() for file in files))
+            self.assertEqual(self.client.request("/documents/" + document_id)[0], 404)
+            self.assertEqual(self.client.request(path, payload)[0], 404)
+        finally:
+            with sqlite3.connect(self.storage / "app.sqlite") as db:
+                db.execute("UPDATE admission_period_availability SET enabled=1 WHERE period_id=?", (self.period_id,))
+        self.assertNotEqual(self.create_application(profile_id), app_id)
+
+    def test_cancel_file_cleanup_failure_can_be_retried(self):
+        app_id = self.create_application(self.create_profile())
+        self.assertEqual(self.upload(app_id)[0], 303)
+        with sqlite3.connect(self.storage / "app.sqlite") as db:
+            name = db.execute("SELECT storage_name FROM application_documents WHERE application_id=?", (app_id,)).fetchone()[0]
+        file = self.storage / "documents" / name
+        file.unlink()
+        file.mkdir()
+        path = f"/applications/{app_id}/cancel"
+        status, body, _ = self.client.request(path, {
+            "csrf": self.client.csrf(path), "version": self.application(app_id)["version"], "confirm_cancel": "1"
+        })
+        self.assertEqual(status, 503, body)
+        self.assertIn("penghapusan berkas belum selesai", body)
+        with sqlite3.connect(self.storage / "app.sqlite") as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM applications WHERE id=?", (app_id,)).fetchone()[0], 0)
+            self.assertEqual(db.execute("SELECT count(*) FROM document_deletion_queue WHERE storage_name=?", (name,)).fetchone()[0], 1)
+        file.rmdir()
+        environment = dict(os.environ, APP_STORAGE=str(self.storage), APP_ENV="development", APP_URL=self.base, MAIL_TRANSPORT="file")
+        result = subprocess.run(
+            [shutil.which("php"), "bin/cleanup-cancelled-documents.php"],
+            cwd=ROOT, env=environment, capture_output=True, text=True, timeout=10
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with sqlite3.connect(self.storage / "app.sqlite") as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM document_deletion_queue WHERE storage_name=?", (name,)).fetchone()[0], 0)
 
     def test_ownership_csrf_and_snapshot_isolation(self):
         profile_id = self.create_profile()
@@ -483,6 +570,7 @@ class AdmissionFlow(unittest.TestCase):
         self.assertEqual(headers["Retry-After"], "900")
 
     def test_production_registration_is_disabled(self):
+        app_id = self.create_application(self.create_profile())
         csrf = self.client.csrf("/participants/new")
         session_id = next(cookie.value for cookie in self.client.cookies if cookie.name == "spmb_session")
         environment = dict(
@@ -504,6 +592,17 @@ class AdmissionFlow(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("STATUS=403", result.stdout)
         self.assertIn("belum dibuka untuk data nyata", result.stdout)
+        cancel_code = code.replace("'/participants/new'", f"'/applications/{app_id}/cancel'").replace(
+            "require 'public/index.php';",
+            f"$_POST += ['confirm_cancel' => '1', 'version' => '{self.application(app_id)['version']}']; require 'public/index.php';"
+        )
+        result = subprocess.run(
+            [shutil.which("php"), "-r", cancel_code, session_id, csrf],
+            cwd=ROOT, env=environment, capture_output=True, text=True, timeout=10
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("STATUS=403", result.stdout)
+        self.assertIsNotNone(self.application(app_id))
         location_code = code.replace("'/participants/new'", "'/participants/location'").replace(
             "require 'public/index.php';",
             "$_POST += ['location_consent' => '1', 'latitude' => '3.5', 'longitude' => '99.1']; require 'public/index.php';"

@@ -109,6 +109,10 @@ function database(string $storage): PDO
             action TEXT NOT NULL,
             created_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS document_deletion_queue (
+            storage_name TEXT PRIMARY KEY,
+            created_at INTEGER NOT NULL
+        );
     SQL);
     return $db;
 }

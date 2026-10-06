@@ -54,7 +54,9 @@ Untuk tautan pemulihan pada domain Herd, atur environment web server
   pengiriman dan penerbitan nomor pendaftaran. Data/dokumen tidak dapat diubah setelah dikirim.
 
 Antarmuka menggunakan identitas PPDB, teks layanan pemerintah yang formal, dan palet
-biru pada halaman autentikasi serta dashboard. Nama instansi, logo, dan wilayah
+biru pada halaman autentikasi serta dashboard. Header akun wali dan menu navigasi
+tetap terlihat saat halaman pendaftar digulir, dan disembunyikan saat mencetak.
+Nama instansi, logo, dan wilayah
 penyelenggara belum ditetapkan; lengkapi identitas dan otorisasi penyelenggara sebelum publikasi.
 
 Register publik tidak memberikan akses panitia. Tenancy, peran staf, dan MFA
@@ -94,6 +96,16 @@ Satu draf per profil dan periode; pengiriman ulang tidak menggandakan pendaftara
 Satu periode mewakili satu sekolah dan satu pilihan, belum pemilihan lintas sekolah.
 Data profil disalin saat draf dibuat. Mengedit profil tidak mengubah draf atau snapshot
 pendaftaran yang sudah dikirim. Data dalam draf dapat diedit tersendiri sebelum pengiriman.
+Pada **Pendaftaran Anda**, tombol **Batal** tersedia hanya untuk draf, termasuk
+draf periode diarsipkan/ditutup. Halaman konfirmasi dan persetujuan wajib sebelum
+registrasi, riwayat draf, serta seluruh unggahan (aktif maupun lama) dihapus permanen.
+Profil peserta tetap ada; pendaftaran terkirim tidak dapat dihapus dengan fitur ini.
+Pembatalan memeriksa kepemilikan, CSRF, dan versi draf, serta diblokir pada produksi.
+Audit akun hanya mencatat aksi pembatalan tanpa data peserta.
+Penghapusan berkas memakai antrean persisten agar dapat dilanjutkan jika proses
+terputus setelah penghapusan data registrasi. Jika pembersihan gagal, aplikasi
+menampilkan kesalahan; pengelola menjalankan `php bin/cleanup-cancelled-documents.php`
+dengan `APP_STORAGE` yang sama untuk menuntaskan antrean.
 Penyimpanan draf, upload, dan pengiriman hanya diizinkan saat jadwal periode terbuka.
 Sesudah tenggat, draf dan tanda terima tetap dapat dibaca.
 
