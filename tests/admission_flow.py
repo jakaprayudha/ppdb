@@ -80,7 +80,7 @@ class AdmissionFlow(unittest.TestCase):
 
     def setUp(self):
         self.client = AdmissionClient(self.base)
-        self.email = self._testMethodName + "@example.test"
+        self.email = hashlib.sha256(self._testMethodName.encode()).hexdigest()[:32] + "@example.test"
         self.assertEqual(self.register(self.email)[0], 303)
         self.assertEqual(self.login(self.client, self.email)[0], 303)
         with sqlite3.connect(self.storage / "app.sqlite") as db:
@@ -235,6 +235,10 @@ class AdmissionFlow(unittest.TestCase):
             self.assertEqual(db.execute(
                 "SELECT count(*) FROM application_events WHERE application_id=? AND action='submitted'", (app_id,)
             ).fetchone()[0], 1)
+        self.assertIn("Belum dibuka untuk penerimaan nyata", receipt)
+        self.assertNotIn("Dokumen identitas fiktif (DEMO)", receipt)
+        self.assertIn("Dokumen identitas", receipt)
+        self.assertEqual(self.application(app_id)["rule_snapshot_json"], submitted["rule_snapshot_json"])
         self.assertIn("Peserta Contoh", self.client.request("/dashboard")[1])
 
     def test_ownership_csrf_and_snapshot_isolation(self):
@@ -362,7 +366,9 @@ class AdmissionFlow(unittest.TestCase):
                     status, body, _ = self.client.request("/applications/new?period=" + period_id)
                     self.assertEqual(status, 200)
                     self.assertIn("Negeri · SPMB" if mode == "negeri" else "Swasta · Penerimaan mandiri", body)
-                    self.assertIn("DEMO", body)
+                    self.assertIn("Belum dibuka untuk penerimaan nyata", body)
+                    self.assertNotIn("fiktif untuk demo", body)
+                    self.assertNotIn("(DEMO)", body)
                     if mode == "negeri":
                         self.assertIn("Domisili adalah istilah pengganti zonasi", body)
                     self.assertNotEqual(self.cli("template", mode, level).returncode, 0)
@@ -381,6 +387,37 @@ class AdmissionFlow(unittest.TestCase):
         self.assertNotEqual(self.cli("template", "negeri", "SMP", extra_environment={
             "APP_ENV": "production", "APP_URL": "https://example.test", "MAIL_TRANSPORT": "mail"
         }).returncode, 0)
+
+    def test_legacy_document_labels_display_without_changing_configuration(self):
+        with sqlite3.connect(self.storage / "app.sqlite") as db:
+            configuration = json.loads(db.execute(
+                "SELECT config_json FROM admission_periods WHERE id=?", (self.period_id,)
+            ).fetchone()[0])
+        configuration["code"] = "legacy-labels-test"
+        configuration["pathways"][0]["documents"] = [
+            {"code": "kartu-keluarga", "label": "Kartu keluarga — gunakan berkas fiktif untuk demo", "required": True},
+            {"code": "akta-kelahiran", "label": "Akta kelahiran — berkas fiktif untuk demo", "required": True},
+            {"code": "bukti-afirmasi", "label": "Bukti afirmasi — fiktif untuk demo", "required": True}
+        ]
+        path = Path(self.temp.name) / "legacy-labels.json"
+        path.write_text(json.dumps(configuration))
+        self.assertEqual(self.cli("import", str(path)).returncode, 0)
+        with sqlite3.connect(self.storage / "app.sqlite") as db:
+            period_id, before = db.execute("SELECT id, config_json FROM admission_periods WHERE code=?", (configuration["code"],)).fetchone()
+        profile_id = self.create_profile()
+        app_id = self.create_application(profile_id, period_id)
+        for route in ["/applications/new?period=" + period_id,
+                      f"/applications/{app_id}?step=3", f"/applications/{app_id}?step=4"]:
+            status, body, _ = self.client.request(route)
+            self.assertEqual(status, 200)
+            self.assertIn("Kartu keluarga", body)
+            self.assertIn("Akta kelahiran", body)
+            self.assertIn("Bukti afirmasi", body)
+            self.assertNotIn("fiktif untuk demo", body)
+            self.assertIn("Belum dibuka untuk penerimaan nyata", body)
+        with sqlite3.connect(self.storage / "app.sqlite") as db:
+            after = db.execute("SELECT config_json FROM admission_periods WHERE id=?", (period_id,)).fetchone()[0]
+        self.assertEqual(after, before)
 
     def test_document_integrity_and_request_limits(self):
         profile_id = self.create_profile()

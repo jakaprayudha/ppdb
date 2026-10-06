@@ -8,11 +8,11 @@ function admissionTemplate(string $mode, string $level, DateTimeImmutable $now):
     }
     $now = $now->setTimezone(new DateTimeZone('Asia/Jakarta'));
     $commonDocuments = [
-        ['code' => 'kartu-keluarga', 'label' => 'Kartu keluarga — gunakan berkas fiktif untuk demo', 'required' => true],
-        ['code' => 'akta-kelahiran', 'label' => 'Akta kelahiran — gunakan berkas fiktif untuk demo', 'required' => true],
+        ['code' => 'kartu-keluarga', 'label' => 'Kartu keluarga', 'required' => true],
+        ['code' => 'akta-kelahiran', 'label' => 'Akta kelahiran', 'required' => true],
     ];
     if ($level !== 'SD') {
-        $commonDocuments[] = ['code' => 'kelulusan', 'label' => 'Ijazah / surat keterangan lulus — berkas fiktif untuk demo', 'required' => true];
+        $commonDocuments[] = ['code' => 'kelulusan', 'label' => 'Ijazah / surat keterangan lulus', 'required' => true];
     }
     $pathway = static function (string $code, string $name, string $description, array $extra = []) use ($commonDocuments): array {
         return ['code' => $code, 'name' => $name, 'description' => $description, 'documents' => array_merge($commonDocuments, $extra)];
@@ -23,16 +23,16 @@ function admissionTemplate(string $mode, string $level, DateTimeImmutable $now):
                 'Untuk calon peserta yang berdomisili dalam wilayah penerimaan yang ditetapkan pemerintah daerah. Wilayah, masa berlaku bukti domisili, dan prioritas wajib mengikuti Juknis; contoh ini tidak menghitung jarak atau menentukan kelayakan.'),
             $pathway('afirmasi', 'Afirmasi',
                 'Untuk calon peserta dari keluarga ekonomi tidak mampu dan calon peserta penyandang disabilitas sesuai ketentuan. Jenis bukti mengikuti kategori dan Juknis; tidak semua peserta wajib menyerahkan bukti bantuan sosial maupun bukti disabilitas sekaligus.',
-                [['code' => 'bukti-afirmasi', 'label' => 'Bukti afirmasi sesuai kategori (ekonomi / disabilitas) — fiktif untuk demo', 'required' => true]]),
+                [['code' => 'bukti-afirmasi', 'label' => 'Bukti afirmasi sesuai kategori (ekonomi / disabilitas)', 'required' => true]]),
         ];
         if ($level !== 'SD') {
             $pathways[] = $pathway('prestasi', 'Prestasi',
                 'Untuk prestasi akademik atau nonakademik sesuai ketentuan. Bukti, masa prestasi, bobot rapor/tes yang berlaku, dan pemeringkatan harus ditetapkan dalam Juknis; tidak ada skor otomatis pada template ini.',
-                [['code' => 'bukti-prestasi', 'label' => 'Bukti prestasi sesuai kategori: rapor / sertifikat / bukti lain — fiktif untuk demo', 'required' => true]]);
+                [['code' => 'bukti-prestasi', 'label' => 'Bukti prestasi sesuai kategori: rapor / sertifikat / bukti lain', 'required' => true]]);
         }
         $pathways[] = $pathway('mutasi', 'Mutasi',
             'Untuk perpindahan tugas orang tua/wali serta anak guru sesuai ketentuan. Bukti mengikuti kategori dan Juknis; tidak seluruh pendaftar wajib memiliki surat perpindahan tugas dan surat anak guru sekaligus.',
-            [['code' => 'bukti-mutasi', 'label' => 'Bukti mutasi sesuai kategori: perpindahan tugas / anak guru — fiktif untuk demo', 'required' => true]]);
+            [['code' => 'bukti-mutasi', 'label' => 'Bukti mutasi sesuai kategori: perpindahan tugas / anak guru', 'required' => true]]);
         $reference = 'Baseline Permendikdasmen No. 3 Tahun 2025. Template contoh; Juknis daerah/tahun ajaran, kuota, kelayakan, dan persetujuan penyelenggara belum ditetapkan. Bukan penerimaan nyata.';
     } else {
         $pathways = [
@@ -42,11 +42,11 @@ function admissionTemplate(string $mode, string $level, DateTimeImmutable $now):
         if ($level !== 'SD') {
             $pathways[] = $pathway('prestasi', 'Prestasi sekolah',
                 'Jalur opsional jika sekolah menyediakan penerimaan berdasarkan prestasi. Jenis prestasi, bukti, seleksi, dan manfaat mengikuti kebijakan sekolah; bukan kewajiban nasional.',
-                [['code' => 'bukti-prestasi', 'label' => 'Bukti prestasi sesuai kebijakan sekolah — fiktif untuk demo', 'required' => true]]);
+                [['code' => 'bukti-prestasi', 'label' => 'Bukti prestasi sesuai kebijakan sekolah', 'required' => true]]);
         }
         $pathways[] = $pathway('beasiswa', 'Beasiswa / Bantuan biaya',
             'Contoh jalur opsional bila sekolah menyediakan program bantuan biaya. Kriteria, bukti, cakupan bantuan, dan keputusan harus ditetapkan sekolah; memilih jalur ini bukan jaminan memperoleh beasiswa.',
-            [['code' => 'bukti-beasiswa', 'label' => 'Bukti pengajuan bantuan sesuai kebijakan sekolah — fiktif untuk demo', 'required' => true]]);
+            [['code' => 'bukti-beasiswa', 'label' => 'Bukti pengajuan bantuan sesuai kebijakan sekolah', 'required' => true]]);
         $reference = 'Template penerimaan mandiri swasta, bukan standar jalur nasional yang wajib. Kebijakan sekolah, biaya, dan program bantuan belum disahkan. Kerja sama SPMB Pemda membutuhkan konfigurasi tersendiri.';
     }
     return [

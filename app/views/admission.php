@@ -63,10 +63,10 @@ function applicationCards(array $applications): void
         ?>
         <article class="list-card">
             <div><span class="status-tag <?= $item['status'] === 'submitted' ? 'status-submitted' : '' ?>"><?= $item['status'] === 'submitted' ? 'Terkirim · Menunggu verifikasi' : 'Draf' ?></span>
-                <?php if ($item['is_demo']): ?><span class="demo-tag">DEMO</span><?php endif; ?>
+                <?php if ($item['is_demo']): ?><span class="demo-tag">Belum dibuka untuk penerimaan nyata</span><?php endif; ?>
                 <?php if (!(int) $item['period_enabled']): ?><span class="status-tag">Periode diarsipkan · hanya baca</span><?php endif; ?>
                 <h3><?= escape($student['name'] ?: 'Peserta belum diisi') ?></h3>
-                <p><?= escape($item['school']) ?> · <?= escape($item['academic_year']) ?></p>
+                <p><?= escape(admissionDisplayText($item['school'])) ?> · <?= escape($item['academic_year']) ?></p>
                 <small>Terakhir disimpan: <?= escape(admissionDate((int) $item['updated_at'], $item['timezone'])) ?></small>
             </div>
             <a class="button button-outline" href="/applications/<?= escape($item['id']) ?><?= $item['status'] === 'submitted' ? '?step=4' : '' ?>"><?= $item['status'] === 'submitted' ? 'Lihat status' : (!(int) $item['period_enabled'] ? 'Lihat draf arsip' : 'Lanjutkan draf') ?> →</a>
@@ -156,10 +156,10 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
             <div class="action-row"><button class="button button-primary compact-button" type="submit">Cari sekolah</button><a class="text-link" href="/admissions?profile=<?= escape(admissionQuery('profile')) ?>">Reset filter</a><span class="field-help"><?= count($periods) ?> dari <?= $totalPeriods ?> periode tersedia</span></div>
         </form>
         <?php if (!$periods): ?><div class="empty-state"><h2><?= $totalPeriods ? 'Tidak ada sekolah yang cocok' : 'Belum ada periode penerimaan' ?></h2><p><?= $totalPeriods ? 'Ubah kata pencarian atau reset filter kecamatan.' : 'Pengelola perlu menyiapkan jadwal dan persyaratan melalui konfigurasi admin lokal.' ?></p></div><?php endif; ?>
-        <div class="profile-grid"><?php foreach ($periods as $item): $configuration = admissionData($item['config_json']); ?>
+        <div class="profile-grid"><?php foreach ($periods as $item): $configuration = $item['configuration']; ?>
             <article class="period-card">
-                <?php if ($item['is_demo']): ?><span class="demo-tag">DEMO · BUKAN PENERIMAAN NYATA</span><?php endif; ?>
-                <span class="status-tag"><?= escape(periodState($item)) ?></span><h2><?= escape($item['school']) ?></h2><p><?= escape($item['organizer']) ?></p><span class="section-badge"><?= escape(admissionModeLabel($configuration)) ?></span>
+                <?php if ($item['is_demo']): ?><span class="demo-tag">Belum dibuka untuk penerimaan nyata</span><?php endif; ?>
+                <span class="status-tag"><?= escape($item['is_demo'] ? 'Formulir tersedia untuk pengujian' : periodState($item)) ?></span><h2><?= escape($item['school']) ?></h2><p><?= escape($item['organizer']) ?></p><span class="section-badge"><?= escape(admissionModeLabel($configuration)) ?></span>
                 <?php if (isset($configuration['npsn'], $configuration['district'])): ?><p>NPSN <?= escape($configuration['npsn']) ?> · Kec. <?= escape($configuration['district']) ?><br><?= escape($configuration['regency']) ?></p><a class="text-link" href="https://referensi.data.kemendikdasmen.go.id/pendidikan/npsn/<?= escape($configuration['npsn']) ?>" target="_blank" rel="noopener">Profil resmi sekolah ↗</a><?php endif; ?>
                 <dl><dt>Jenjang / tahun ajaran</dt><dd><?= escape($item['level'] . ' · ' . $item['academic_year']) ?></dd><dt>Pendaftaran</dt><dd><?= escape(admissionDate((int) $item['opens_at'], $item['timezone'])) ?><br>sampai <?= escape(admissionDate((int) $item['closes_at'], $item['timezone'])) ?></dd><dt>Jalur tersedia</dt><dd><?= escape(implode(', ', array_column($configuration['pathways'], 'name'))) ?></dd><dt>Rujukan ketentuan</dt><dd><?= escape($configuration['rule_reference']) ?></dd><dt>Bantuan</dt><dd><?= escape($configuration['help_contact']) ?></dd></dl>
                 <?php if (periodState($item) === 'Pendaftaran dibuka'): ?><a class="button button-primary" href="/applications/new?period=<?= escape($item['id']) ?>&amp;profile=<?= escape(admissionQuery('profile')) ?>">Mulai pendaftaran →</a><?php endif; ?>
@@ -171,7 +171,7 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
         <div class="requirement-note"><h3>Ketentuan pemilihan jalur</h3><p><?= escape($period['configuration']['rule_reference']) ?></p>
             <?php if (($period['configuration']['admission_mode'] ?? '') === 'public_spmb'): ?><p>Domisili adalah istilah pengganti zonasi. Afirmasi dan mutasi memiliki kategori bukti berbeda. Pilihan jalur tidak berarti kelayakan sudah diverifikasi.</p><?php endif; ?>
         </div>
-        <?php if ($period['is_demo']): ?><div class="demo-banner">Periode DEMO. Jangan mengunggah dokumen atau identitas asli.</div><?php endif; ?>
+        <?php if ($period['is_demo']): ?><div class="demo-banner">Belum dibuka untuk penerimaan nyata. Formulir tersedia untuk pengujian; jangan mengunggah dokumen atau identitas asli.</div><?php endif; ?>
         <?php if (!$profiles): ?><div class="empty-state"><h2>Tambahkan profil peserta terlebih dahulu</h2><a class="button button-primary compact-button" href="/participants/new">Tambah peserta →</a></div>
         <?php elseif ((int) $period['enabled']): ?>
             <form method="post" class="form-card"><?php admissionCsrf(); ?><input type="hidden" name="period_id" value="<?= escape($period['id']) ?>">
@@ -186,7 +186,7 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
         $base = '/applications/' . $application['id']; ?>
         <div class="section-heading"><div><p class="eyebrow"><?= $screen === 'receipt' ? 'BUKTI PENGIRIMAN' : 'REGISTRASI PESERTA DIDIK' ?></p><h1><?= escape($title) ?></h1></div><span class="status-tag"><?= $application['status'] === 'submitted' ? 'Terkirim · Menunggu verifikasi' : 'Draf' ?></span></div>
         <p class="lead"><?= escape($period['school'] . ' · ' . $period['academic_year'] . ' · ' . $pathway['name']) ?></p>
-        <?php if ($period['is_demo']): ?><div class="demo-banner">DEMO · Pendaftaran ini untuk pengujian dan bukan penerimaan nyata.</div><?php endif; ?>
+        <?php if ($period['is_demo']): ?><div class="demo-banner">Belum dibuka untuk penerimaan nyata. Pendaftaran ini masih untuk pengujian.</div><?php endif; ?>
         <?php if ($screen === 'application' && $application['status'] === 'draft'): ?>
             <nav class="step-nav" aria-label="Langkah pendaftaran"><?php foreach ([1 => 'Data peserta', 2 => 'Wali & jalur', 3 => 'Dokumen', 4 => 'Tinjau & kirim'] as $number => $label): ?><a href="<?= escape($base . '?step=' . $number) ?>"<?= $step === $number ? ' aria-current="step"' : '' ?>><span><?= $number ?></span><?= escape($label) ?></a><?php endforeach; ?></nav>
             <p class="save-state">Terakhir tersimpan: <?= escape(admissionDate((int) $application['updated_at'], $period['timezone'])) ?>. Simpan perubahan sebelum berpindah langkah.</p>
@@ -221,14 +221,14 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
                     <div class="requirement-note"><h3>Pemberitahuan penyelenggara</h3><p><?= escape($period['configuration']['privacy_notice']) ?></p><p>Rujukan: <?= escape($period['configuration']['rule_reference']) ?></p><p>Bantuan: <?= escape($period['configuration']['help_contact']) ?></p></div>
                     <p class="lead">Setelah dikirim, data dan dokumen dikunci. Pengiriman bukan jaminan diterima. Panitia masih perlu memverifikasi berkas.</p>
                     <?php if (!$readonly): ?><form method="post"><?php admissionCsrf(); admissionVersion((int) $application['version']); ?><input type="hidden" name="action" value="submit">
-                        <div class="privacy-check"><input type="checkbox" name="declaration" id="declaration" value="1" required><label for="declaration">Saya orang tua / wali yang berwenang, telah membaca pemberitahuan privasi, dan menyatakan data serta dokumen yang dikirim benar. Untuk periode demo, saya hanya menggunakan data uji.</label></div>
+                        <div class="privacy-check"><input type="checkbox" name="declaration" id="declaration" value="1" required><label for="declaration">Saya orang tua / wali yang berwenang, telah membaca pemberitahuan privasi, dan menyatakan data serta dokumen yang dikirim benar.<?= $period['is_demo'] ? ' Selama penerimaan nyata belum dibuka, saya hanya menggunakan data uji.' : '' ?></label></div>
                         <div class="form-actions"><a class="button button-outline" href="<?= escape($base . '?step=3') ?>">Kembali ke dokumen</a><button class="button button-primary compact-button" type="submit">Kirim pendaftaran →</button></div>
                     </form><?php endif; ?>
                 </section>
             <?php endif; ?>
         <?php else: ?>
             <section class="form-card receipt-card">
-                <span class="section-badge">PENDAFTARAN TELAH DIKIRIM</span><?php if ($period['is_demo']): ?> <span class="demo-tag">DEMO · BUKAN PENERIMAAN NYATA</span><?php endif; ?><h2>Tanda terima pendaftaran</h2><p class="registration-number"><?= escape($application['registration_number'] ?? '') ?></p>
+                <span class="section-badge">PENDAFTARAN TELAH DIKIRIM</span><?php if ($period['is_demo']): ?> <span class="demo-tag">Belum dibuka untuk penerimaan nyata</span><?php endif; ?><h2>Tanda terima pendaftaran</h2><p class="registration-number"><?= escape($application['registration_number'] ?? '') ?></p>
                 <dl class="summary-grid"><div><dt>Peserta</dt><dd><?= escape($data['name']) ?></dd></div><div><dt>Sekolah / tahun ajaran</dt><dd><?= escape($period['school'] . ' · ' . $period['academic_year']) ?></dd></div><div><dt>Jalur</dt><dd><?= escape($pathway['name']) ?></dd></div><div><dt>Dikirim pada</dt><dd><?= escape(admissionDate((int) $application['submitted_at'], $period['timezone'])) ?></dd></div></dl>
                 <div class="notice">Status: terkirim, menunggu verifikasi. Tanda terima ini bukan bukti diterima di sekolah. Panel verifikasi panitia belum tersedia pada tahap ini.</div>
                 <div class="action-row print-hide"><button type="button" class="button button-primary compact-button" data-print hidden>Cetak / simpan PDF ↓</button><a class="button button-outline" href="/admissions">Pendaftaran lainnya</a></div>

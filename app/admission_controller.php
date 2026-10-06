@@ -251,4 +251,8 @@ if ($application && in_array($screen, ['application', 'receipt'], true)) {
     $events = array_reverse($statement->fetchAll());
 }
 $notice = takeFlash();
+if ($period) {
+    $period = admissionPresentation($period);
+}
+$periods = array_map('admissionPresentation', $periods);
 require __DIR__ . '/views/admission.php';

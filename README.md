@@ -64,6 +64,13 @@ pendaftaran nyata dikaitkan ke akun.
 **Seluruh perubahan pada modul registrasi diblokir pada `APP_ENV=production`.**
 Modul ini adalah pilot pengembangan, bukan layanan penerimaan pemerintah yang siap dibuka.
 
+Label dokumen pada tampilan menggunakan nama biasa seperti “Kartu keluarga” dan
+“Akta kelahiran”, tanpa akhiran instruksi demo. Periode uji ditandai
+**Belum dibuka untuk penerimaan nyata**, termasuk pada tanda terima cetak.
+Label konfigurasi lama dinormalisasi hanya saat ditampilkan; database, kode periode,
+penanda `is_demo`, serta snapshot pendaftaran yang telah dikirim tidak diubah.
+Perapian teks ini tidak mengaktifkan produksi atau mengesahkan jadwal/persyaratan.
+
 ## Mencoba registrasi peserta
 
 ```sh

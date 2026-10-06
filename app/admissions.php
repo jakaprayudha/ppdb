@@ -464,6 +464,34 @@ function admissionModeLabel(array $configuration): string
     };
 }
 
+function admissionDisplayText(string $text): string
+{
+    return str_replace([
+        ' — gunakan berkas fiktif untuk demo',
+        ' — berkas fiktif untuk demo',
+        ' — fiktif untuk demo',
+        ' fiktif (DEMO)',
+        ' (DEMO)',
+    ], '', $text);
+}
+
+function admissionPresentation(array $period): array
+{
+    // Only presentation is normalized; stored configurations and submitted snapshots stay intact.
+    $configuration = $period['configuration'] ?? admissionData($period['config_json']);
+    foreach ($configuration['pathways'] as &$pathway) {
+        foreach ($pathway['documents'] as &$document) {
+            $document['label'] = admissionDisplayText($document['label']);
+        }
+        unset($document);
+    }
+    unset($pathway);
+    $period['configuration'] = $configuration;
+    $period['school'] = admissionDisplayText($period['school']);
+    $period['organizer'] = admissionDisplayText($period['organizer']);
+    return $period;
+}
+
 function insertAdmissionPeriod(PDO $db, array $configuration): string
 {
     $data = validatePeriodConfiguration($configuration);
