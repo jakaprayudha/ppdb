@@ -171,7 +171,10 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
         <form method="get" class="form-card search-periods"><input type="hidden" name="profile" value="<?= escape(admissionQuery('profile')) ?>">
             <div class="form-grid"><div class="field"><label for="q">Cari sekolah / NPSN</label><input id="q" name="q" type="search" value="<?= escape(admissionQuery('q')) ?>" placeholder="Nama sekolah atau NPSN"></div>
                 <div class="field"><label for="district">Kecamatan</label><select id="district" name="district"><option value="">Semua kecamatan</option><?php foreach ($districts as $district): ?><option value="<?= escape($district) ?>"<?= admissionQuery('district') === $district ? ' selected' : '' ?>><?= escape($district) ?></option><?php endforeach; ?></select></div></div>
-            <div class="action-row"><button class="button button-primary compact-button" type="submit">Cari sekolah</button><a class="text-link" href="/admissions?profile=<?= escape(admissionQuery('profile')) ?>">Reset filter</a><span class="field-help"><?= count($periods) ?> dari <?= $totalPeriods ?> periode tersedia</span></div>
+            <div class="period-search-footer">
+                <div class="action-row"><button class="button button-primary compact-button" type="submit">Cari sekolah</button><a class="text-link" href="/admissions?profile=<?= escape(admissionQuery('profile')) ?>">Reset filter</a></div>
+                <span class="field-help period-result-count"><?= count($periods) ?> dari <?= $totalPeriods ?> periode tersedia</span>
+            </div>
         </form>
         <?php if (!$periods): ?><div class="empty-state"><h2><?= $totalPeriods ? 'Tidak ada sekolah yang cocok' : 'Belum ada periode penerimaan' ?></h2><p><?= $totalPeriods ? 'Ubah kata pencarian atau reset filter kecamatan.' : 'Pengelola perlu menyiapkan jadwal dan persyaratan melalui konfigurasi admin lokal.' ?></p></div><?php endif; ?>
         <div class="profile-grid"><?php foreach ($periods as $item): $configuration = $item['configuration']; ?>
