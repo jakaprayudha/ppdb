@@ -38,18 +38,7 @@ function participantField(string $key, array $data, array $errors, bool $disable
     <?php
 }
 
-function participantSummary(array $data): void
-{
-    echo '<dl class="summary-grid">';
-    foreach (admissionFields() as $key => [$label]) {
-        $value = $data[$key] ?? '';
-        if ($key === 'sex') {
-            $value = match ($value) { 'L' => 'Laki-laki', 'P' => 'Perempuan', default => '' };
-        }
-        echo '<div><dt>' . escape($label) . '</dt><dd>' . escape($value !== '' ? $value : 'Belum diisi') . '</dd></div>';
-    }
-    echo '</dl>';
-}
+require __DIR__ . '/participant_summary.php';
 
 function applicationCards(array $applications, bool $canCancel): void
 {
@@ -62,7 +51,7 @@ function applicationCards(array $applications, bool $canCancel): void
         $student = admissionData($item['data_json']);
         ?>
         <article class="list-card">
-            <div><span class="status-tag <?= $item['status'] === 'submitted' ? 'status-submitted' : '' ?>"><?= $item['status'] === 'submitted' ? 'Terkirim · Menunggu verifikasi' : 'Draf' ?></span>
+            <div><span class="status-tag <?= $item['status'] === 'submitted' ? 'status-submitted' : '' ?>"><?= escape($item['status'] === 'submitted' ? 'Terkirim · ' . verificationLabel($item['verification_status']) : 'Draf') ?></span>
                 <?php if ($item['is_demo']): ?><span class="demo-tag">Belum dibuka untuk penerimaan nyata</span><?php endif; ?>
                 <?php if (!(int) $item['period_enabled']): ?><span class="status-tag">Periode diarsipkan · hanya baca</span><?php endif; ?>
                 <h3><?= escape($student['name'] ?: 'Peserta belum diisi') ?></h3>
@@ -92,7 +81,7 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
 <!doctype html>
 <html lang="id">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light">
-    <title><?= escape($title) ?> — PPDB</title><link rel="stylesheet" href="/assets/app.css"><script src="/assets/app.js" defer></script></head>
+    <title><?= escape($title) ?> — PPDB</title><link rel="stylesheet" href="<?= escape(assetUrl('app.css')) ?>"><script src="<?= escape(assetUrl('app.js')) ?>" defer></script></head>
 <body class="dashboard-page">
 <a class="skip-link" href="#main">Lewati ke konten</a>
 <div class="portal-topbar">
@@ -219,7 +208,7 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
     <?php elseif (in_array($screen, ['application', 'receipt'], true) && $application && $period):
         $pathway = pathwayConfig($period, $application['pathway']);
         $base = '/applications/' . $application['id']; ?>
-        <div class="section-heading"><div><p class="eyebrow"><?= $screen === 'receipt' ? 'BUKTI PENGIRIMAN' : 'REGISTRASI PESERTA DIDIK' ?></p><h1><?= escape($title) ?></h1></div><span class="status-tag"><?= $application['status'] === 'submitted' ? 'Terkirim · Menunggu verifikasi' : 'Draf' ?></span></div>
+        <div class="section-heading"><div><p class="eyebrow"><?= $screen === 'receipt' ? 'BUKTI PENGIRIMAN' : 'REGISTRASI PESERTA DIDIK' ?></p><h1><?= escape($title) ?></h1></div><span class="status-tag"><?= escape($application['status'] === 'submitted' ? 'Terkirim · ' . verificationLabel($verification['status'] ?? null) : 'Draf') ?></span></div>
         <p class="lead"><?= escape($period['school'] . ' · ' . $period['academic_year'] . ' · ' . $pathway['name']) ?></p>
         <?php if ($period['is_demo']): ?><div class="demo-banner">Belum dibuka untuk penerimaan nyata. Pendaftaran ini masih untuk pengujian.</div><?php endif; ?>
         <?php if ($screen === 'application' && $application['status'] === 'draft'): ?>
@@ -255,6 +244,7 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
                     <h2>Checklist dokumen</h2><ul class="checklist"><?php foreach ($pathway['documents'] as $requirement): ?><li><?= escape($requirement['label']) ?> — <?= isset($documents[$requirement['code']]) ? 'Sudah diunggah' : ($requirement['required'] ? 'WAJIB: belum diunggah' : 'Opsional: belum diunggah') ?></li><?php endforeach; ?></ul>
                     <div class="requirement-note"><h3>Pemberitahuan penyelenggara</h3><p><?= escape($period['configuration']['privacy_notice']) ?></p><p>Rujukan: <?= escape($period['configuration']['rule_reference']) ?></p><p>Bantuan: <?= escape($period['configuration']['help_contact']) ?></p></div>
                     <p class="lead">Setelah dikirim, data dan dokumen dikunci. Pengiriman bukan jaminan diterima. Panitia masih perlu memverifikasi berkas.</p>
+                    <?php if ($verification): ?><div class="notice"><strong>Verifikasi: <?= escape(verificationLabel($verification['status'])) ?></strong><p><?= nl2br(escape($verification['note'])) ?></p><p>Data terkirim tetap terkunci. Jika perlu perbaikan, hubungi panitia; pengiriman ulang belum tersedia.</p></div><?php endif; ?>
                     <?php if (!$readonly): ?><form method="post"><?php admissionCsrf(); admissionVersion((int) $application['version']); ?><input type="hidden" name="action" value="submit">
                         <div class="privacy-check"><input type="checkbox" name="declaration" id="declaration" value="1" required><label for="declaration">Saya orang tua / wali yang berwenang, telah membaca pemberitahuan privasi, dan menyatakan data serta dokumen yang dikirim benar.<?= $period['is_demo'] ? ' Selama penerimaan nyata belum dibuka, saya hanya menggunakan data uji.' : '' ?></label></div>
                         <div class="form-actions"><a class="button button-outline" href="<?= escape($base . '?step=3') ?>">Kembali ke dokumen</a><button class="button button-primary compact-button" type="submit">Kirim pendaftaran →</button></div>
@@ -265,7 +255,9 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
             <section class="form-card receipt-card">
                 <span class="section-badge">PENDAFTARAN TELAH DIKIRIM</span><?php if ($period['is_demo']): ?> <span class="demo-tag">Belum dibuka untuk penerimaan nyata</span><?php endif; ?><h2>Tanda terima pendaftaran</h2><p class="registration-number"><?= escape($application['registration_number'] ?? '') ?></p>
                 <dl class="summary-grid"><div><dt>Peserta</dt><dd><?= escape($data['name']) ?></dd></div><div><dt>Sekolah / tahun ajaran</dt><dd><?= escape($period['school'] . ' · ' . $period['academic_year']) ?></dd></div><div><dt>Jalur</dt><dd><?= escape($pathway['name']) ?></dd></div><div><dt>Dikirim pada</dt><dd><?= escape(admissionDate((int) $application['submitted_at'], $period['timezone'])) ?></dd></div></dl>
-                <div class="notice">Status: terkirim, menunggu verifikasi. Tanda terima ini bukan bukti diterima di sekolah. Panel verifikasi panitia belum tersedia pada tahap ini.</div>
+                <div class="notice">Status verifikasi: <?= escape(verificationLabel($verification['status'] ?? null)) ?>. Tanda terima ini bukan bukti diterima di sekolah.
+                    <?php if ($verification): ?><p><strong>Catatan panitia:</strong> <?= nl2br(escape($verification['note'])) ?></p><p>Diperbarui: <?= escape(admissionDate((int) $verification['updated_at'], $period['timezone'])) ?></p><?php endif; ?>
+                </div>
                 <div class="action-row print-hide"><button type="button" class="button button-primary compact-button" data-print hidden>Cetak / simpan PDF ↓</button><a class="button button-outline" href="/admissions">Pendaftaran lainnya</a></div>
                 <h2>Data yang dikirim</h2><?php participantSummary($data); ?>
                 <h2>Dokumen yang dikirim</h2><ul class="checklist"><?php foreach ($pathway['documents'] as $requirement): $document = $documents[$requirement['code']] ?? null; ?><li><?= escape($requirement['label']) ?> — <?= $document ? escape($document['original_name']) : 'Tidak diunggah (opsional)' ?><?php if ($document): ?> <a class="text-link print-hide" href="/documents/<?= escape($document['id']) ?>?download=1">Unduh</a><?php endif; ?></li><?php endforeach; ?></ul>

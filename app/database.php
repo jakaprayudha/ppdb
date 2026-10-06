@@ -41,6 +41,11 @@ function database(string $storage): PDO
             action TEXT NOT NULL,
             created_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS admin_accounts (
+            user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            role TEXT NOT NULL CHECK (role = 'central_admin'),
+            created_at INTEGER NOT NULL
+        );
     SQL);
     $db->exec(<<<'SQL'
         CREATE TABLE IF NOT EXISTS admission_periods (
@@ -113,6 +118,85 @@ function database(string $storage): PDO
             storage_name TEXT PRIMARY KEY,
             created_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS application_verifications (
+            application_id TEXT PRIMARY KEY REFERENCES applications(id),
+            status TEXT NOT NULL CHECK (status IN ('valid', 'needs_correction', 'invalid')),
+            note TEXT NOT NULL,
+            reviewer_id INTEGER NOT NULL REFERENCES users(id),
+            version INTEGER NOT NULL DEFAULT 1,
+            updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS verification_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            application_id TEXT NOT NULL REFERENCES applications(id),
+            status TEXT NOT NULL CHECK (status IN ('valid', 'needs_correction', 'invalid')),
+            note TEXT NOT NULL,
+            reviewer_id INTEGER NOT NULL REFERENCES users(id),
+            created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS master_schools (
+            id TEXT PRIMARY KEY,
+            npsn TEXT UNIQUE,
+            name TEXT NOT NULL,
+            level TEXT NOT NULL CHECK (level IN ('SD', 'SMP', 'SMA')),
+            mode TEXT NOT NULL CHECK (mode IN ('public_spmb', 'private_independent')),
+            province TEXT NOT NULL,
+            city TEXT NOT NULL,
+            district TEXT NOT NULL,
+            address TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+            version INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE TABLE IF NOT EXISTS period_school_links (
+            period_id TEXT PRIMARY KEY REFERENCES admission_periods(id),
+            school_id TEXT NOT NULL REFERENCES master_schools(id)
+        );
+        CREATE TABLE IF NOT EXISTS period_management (
+            period_id TEXT PRIMARY KEY REFERENCES admission_periods(id),
+            version INTEGER NOT NULL DEFAULT 1,
+            used INTEGER NOT NULL DEFAULT 0 CHECK (used IN (0, 1))
+        );
+        CREATE TRIGGER IF NOT EXISTS remember_period_usage AFTER INSERT ON applications
+        BEGIN
+            INSERT INTO period_management(period_id, used) VALUES (NEW.period_id, 1)
+            ON CONFLICT(period_id) DO UPDATE SET used = 1;
+        END;
+        INSERT INTO period_management(period_id, used) SELECT DISTINCT period_id, 1 FROM applications WHERE 1
+        ON CONFLICT(period_id) DO UPDATE SET used = 1;
     SQL);
+    syncMasterSchools($db);
     return $db;
+}
+
+function syncMasterSchools(PDO $db): void
+{
+    $db->exec('BEGIN IMMEDIATE');
+    try {
+        $periods = $db->query('SELECT p.* FROM admission_periods p LEFT JOIN period_school_links l ON l.period_id = p.id
+            WHERE l.period_id IS NULL')->fetchAll();
+        foreach ($periods as $period) {
+            $rules = json_decode($period['config_json'], true, 32, JSON_THROW_ON_ERROR);
+            $npsn = ($rules['npsn'] ?? '') !== '' ? $rules['npsn'] : null;
+            $id = bin2hex(random_bytes(16));
+            if ($npsn) {
+                $existing = $db->prepare('SELECT id FROM master_schools WHERE npsn = ?');
+                $existing->execute([$npsn]);
+                $id = $existing->fetchColumn() ?: $id;
+            } else {
+                $existing = $db->prepare('SELECT id FROM master_schools WHERE npsn IS NULL AND name=? AND level=?');
+                $existing->execute([$period['school'], $period['level']]);
+                $id = $existing->fetchColumn() ?: $id;
+            }
+            $db->prepare('INSERT INTO master_schools(id, npsn, name, level, mode, province, city, district, address)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING')
+                ->execute([$id, $npsn, $period['school'], $period['level'], $rules['admission_mode'] ?? 'public_spmb',
+                    $rules['province'] ?? '', $rules['regency'] ?? '', $rules['district'] ?? '', '']);
+            $db->prepare('INSERT INTO period_school_links(period_id, school_id) VALUES (?, ?)')->execute([$period['id'], $id]);
+            $db->prepare('INSERT INTO period_management(period_id) VALUES (?) ON CONFLICT DO NOTHING')->execute([$period['id']]);
+        }
+        $db->exec('COMMIT');
+    } catch (Throwable $exception) {
+        $db->exec('ROLLBACK');
+        throw $exception;
+    }
 }

@@ -53,8 +53,8 @@ function passwordField(string $label, string $name, array $errors, bool $new = f
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <title><?= escape($title) ?> — PPDB</title>
-    <link rel="stylesheet" href="/assets/app.css">
-    <script src="/assets/app.js" defer></script>
+    <link rel="stylesheet" href="<?= escape(assetUrl('app.css')) ?>">
+    <script src="<?= escape(assetUrl('app.js')) ?>" defer></script>
 </head>
 <body class="<?= $page === 'dashboard' ? 'dashboard-page' : 'auth-page' ?>">
 <a class="skip-link" href="#main">Lewati ke konten</a>
@@ -145,13 +145,13 @@ function passwordField(string $label, string $name, array $errors, bool $new = f
                         <button class="button button-primary" type="submit"><?= match ($page) { 'register' => 'Buat akun', 'forgot-password' => 'Kirim tautan pemulihan', 'reset-password' => 'Simpan password baru', default => 'Masuk ke akun' } ?> <span aria-hidden="true">→</span></button>
                     </form>
                     <?php if ($page === 'login'): ?><p class="switch-auth">Belum punya akun? <a href="/register">Daftar sekarang</a></p><?php elseif ($page === 'register'): ?><p class="switch-auth">Sudah punya akun? <a href="/login">Masuk di sini</a></p><?php endif; ?>
-                    <div class="safe-note"><span aria-hidden="true">◇</span><p><?= $page === 'forgot-password' ? 'Tautan berlaku selama 30 menit dan hanya dapat digunakan sekali.' : 'Akun ini untuk wali atau calon murid. Akses panitia dikelola terpisah oleh penyelenggara.' ?></p></div>
+                    <div class="safe-note"><span aria-hidden="true">◇</span><p><?= $page === 'forgot-password' ? 'Tautan berlaku selama 30 menit dan hanya dapat digunakan sekali.' : 'Register publik hanya untuk wali atau calon murid. Admin masuk melalui akun yang ditugaskan pengelola.' ?></p></div>
                 <?php elseif ($resetInvalid): ?>
                     <div class="error-summary" role="alert">Tautan tidak valid, sudah digunakan, atau telah kedaluwarsa.</div><a class="button button-primary" href="/forgot-password">Minta tautan baru <span aria-hidden="true">→</span></a>
                 <?php elseif ($page === 'privacy'): ?>
                     <div class="privacy-copy">
                         <p>Aplikasi ini sedang dalam tahap pengembangan. Gunakan data uji, bukan data pribadi anak yang sebenarnya.</p>
-                        <h2>Data registrasi peserta</h2><p>Modul registrasi menyimpan profil peserta, data orang tua / wali dan alamat, pilihan periode serta jalur, dokumen persyaratan, tanda terima, dan catatan perubahan. Data hanya dapat diakses melalui akun wali pemiliknya. Persyaratan dokumen dan pemberitahuan penyelenggara ditampilkan sebelum pengiriman.</p>
+                        <h2>Data registrasi peserta</h2><p>Modul registrasi menyimpan profil peserta, data orang tua / wali dan alamat, pilihan periode serta jalur, dokumen persyaratan, tanda terima, dan catatan perubahan. Wali dapat mengakses data miliknya. Pada lingkungan pengembangan, admin pusat yang ditugaskan dapat memeriksa seluruh pendaftaran terkirim dan dokumen aktifnya, serta mencatat hasil verifikasi yang terlihat oleh wali. Draf tidak tersedia untuk pemeriksaan admin. Persyaratan dokumen dan pemberitahuan penyelenggara ditampilkan sebelum pengiriman.</p>
                         <p>Perubahan profil tidak otomatis mengubah draf yang sudah dibuat. Setelah dikirim, data dan dokumen dikunci. Dokumen yang diganti atau dihapus dari checklist tetap disimpan secara privat untuk audit sampai pengelola menjalankan kebijakan retensi.</p>
                         <p>Pembatalan draf melalui konfirmasi menghapus registrasi, riwayat draf, dan seluruh berkasnya secara permanen, termasuk unggahan lama. Profil peserta tidak dihapus. Catatan audit akun tetap mencatat aksi pembatalan tanpa data peserta. Jika penghapusan berkas terputus, pengelola perlu menuntaskan antrean pembersihan.</p>
                         <h2>Lokasi perangkat (opsional)</h2><p>Tombol Ambil lokasi hanya digunakan setelah persetujuan Anda dan izin browser. Koordinat diteruskan ke layanan internal pengelola untuk mencari wilayah alamat, tanpa nama atau identitas peserta. Aplikasi tidak menyimpan koordinat pada profil, database, atau audit; alamat hasil pencarian baru disimpan saat Anda menekan Simpan profil. Anda dapat menolak izin dan mengisi alamat manual. Lokasi perangkat bukan bukti domisili; periksa hasil sesuai alamat peserta sebelum menyimpan.</p>

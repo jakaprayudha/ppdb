@@ -6,6 +6,18 @@ function escape(string $value): string
     return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+function assetUrl(string $name): string
+{
+    if (!in_array($name, ['app.css', 'app.js', 'master.js'], true)) {
+        throw new InvalidArgumentException('Aset tidak dikenal.');
+    }
+    $hash = hash_file('sha256', dirname(__DIR__) . '/public/assets/' . $name);
+    if ($hash === false) {
+        throw new RuntimeException('Aset aplikasi tidak tersedia.');
+    }
+    return '/assets/' . $name . '?v=' . substr($hash, 0, 16);
+}
+
 function redirect(string $path): never
 {
     header('Location: ' . $path, true, 303);
@@ -84,7 +96,8 @@ function currentUser(PDO $db): ?array
         flash('Sesi berakhir. Silakan masuk kembali.');
         return null;
     }
-    $statement = $db->prepare('SELECT id, name, email, role, auth_version FROM users WHERE id = ?');
+    $statement = $db->prepare('SELECT u.id, u.name, u.email, COALESCE(a.role, u.role) AS role, u.auth_version
+        FROM users u LEFT JOIN admin_accounts a ON a.user_id = u.id WHERE u.id = ?');
     $statement->execute([$_SESSION['user_id']]);
     $user = $statement->fetch();
     if (!$user || (int) $user['auth_version'] !== $_SESSION['auth_version']) {

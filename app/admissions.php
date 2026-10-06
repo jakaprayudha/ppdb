@@ -123,8 +123,9 @@ function ownedProfile(PDO $db, string $id, int $userId): array
 
 function admissionPeriod(PDO $db, string $id): array
 {
-    $statement = $db->prepare('SELECT p.*, COALESCE(v.enabled, 1) AS enabled FROM admission_periods p
-        LEFT JOIN admission_period_availability v ON v.period_id = p.id WHERE p.id = ?');
+    $statement = $db->prepare('SELECT p.*, MIN(COALESCE(v.enabled, 1), COALESCE(s.enabled, 1)) AS enabled FROM admission_periods p
+        LEFT JOIN admission_period_availability v ON v.period_id = p.id
+        LEFT JOIN period_school_links l ON l.period_id = p.id LEFT JOIN master_schools s ON s.id = l.school_id WHERE p.id = ?');
     $statement->execute([$id]);
     $period = $statement->fetch();
     if (!$period) {
@@ -531,17 +532,22 @@ function insertAdmissionPeriod(PDO $db, array $configuration): string
 {
     $data = validatePeriodConfiguration($configuration);
     return admissionTransaction($db, function () use ($db, $data): string {
-        $exists = $db->prepare('SELECT id FROM admission_periods WHERE code = ?');
-        $exists->execute([$data['code']]);
-        if ($exists->fetchColumn()) {
-            throw new InvalidArgumentException('Kode periode sudah ada. Periode yang diterbitkan tidak dapat ditimpa; gunakan kode versi/periode baru.');
-        }
-        $id = bin2hex(random_bytes(16));
-        $db->prepare('INSERT INTO admission_periods (id, code, organizer, school, level, academic_year, opens_at, closes_at, timezone, is_demo, config_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-            ->execute([$id, $data['code'], $data['organizer'], $data['school'], $data['level'], $data['academic_year'],
-                $data['opens_at_timestamp'], $data['closes_at_timestamp'], $data['timezone'], (int) $data['is_demo'], admissionJson($data), time()]);
-        audit($db, 'admission.period_configured');
-        return $id;
+        return persistAdmissionPeriod($db, $data);
     });
+}
+
+function persistAdmissionPeriod(PDO $db, array $data): string
+{
+    $exists = $db->prepare('SELECT id FROM admission_periods WHERE code = ?');
+    $exists->execute([$data['code']]);
+    if ($exists->fetchColumn()) {
+        throw new InvalidArgumentException('Kode periode sudah ada. Periode yang diterbitkan tidak dapat ditimpa; gunakan kode versi/periode baru.');
+    }
+    $id = bin2hex(random_bytes(16));
+    $db->prepare('INSERT INTO admission_periods (id, code, organizer, school, level, academic_year, opens_at, closes_at, timezone, is_demo, config_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        ->execute([$id, $data['code'], $data['organizer'], $data['school'], $data['level'], $data['academic_year'],
+            $data['opens_at_timestamp'], $data['closes_at_timestamp'], $data['timezone'], (int) $data['is_demo'], admissionJson($data), time()]);
+    audit($db, 'admission.period_configured');
+    return $id;
 }

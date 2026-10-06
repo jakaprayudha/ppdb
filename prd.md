@@ -57,6 +57,24 @@ Gunakan prinsip least privilege, pemisahan tugas, MFA untuk peran berisiko, sert
 
 ## 5. Cakupan produk
 
+### Implementasi pilot saat ini (6 Oktober 2026)
+
+Admin pusat lintas 40 SMP negeri Serdang Bedagai tersedia pada development:
+dashboard, daftar/pencarian/filter/paginasi pendaftaran terkirim, pemeriksaan data
+dan dokumen, hasil verifikasi Valid / Perlu perbaikan / Tidak valid dengan catatan
+wajib, riwayat keputusan, CRUD master sekolah/periode melalui tabel berpagination,
+editor jalur dan dokumen, daftar akun admin, dan audit.
+Akun uji dibuat CLI, bukan register publik. Hasil terlihat oleh wali tetapi bukan
+keputusan penerimaan; data terkirim tetap terkunci. Koreksi/pengiriman ulang,
+persetujuan dua pihak untuk penerbitan aturan, admin terbatas sekolah, MFA, dan
+pemisahan tugas belum diimplementasikan. Portal admin diblokir pada produksi.
+Dropdown master memisahkan Sekolah dan Periode pendaftaran. Edit/hapus hanya
+sebelum data pernah dipakai pendaftaran; sesudah itu hanya arsip atau salin menjadi
+periode baru. Draf yang dibatalkan tidak membuka kembali hak edit/hapus master.
+Sekolah dengan periode harus menghapus periode yang belum dipakai terlebih dahulu
+sebelum sekolah dapat dihapus. Arsip sekolah mengarsipkan seluruh periodenya,
+tanpa menghapus data peserta. Periode baru selalu arsip dan untuk pengujian.
+
 ### MVP
 - Multi-tenant: yayasan/dinas, sekolah, jenjang, kampus/lokasi, tahun ajaran, gelombang.
 - Halaman publik informasi penerimaan, jadwal, daya tampung, jalur, syarat, FAQ, kanal pengaduan.

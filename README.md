@@ -59,8 +59,9 @@ tetap terlihat saat halaman pendaftar digulir, dan disembunyikan saat mencetak.
 Nama instansi, logo, dan wilayah
 penyelenggara belum ditetapkan; lengkapi identitas dan otorisasi penyelenggara sebelum publikasi.
 
-Register publik tidak memberikan akses panitia. Tenancy, peran staf, dan MFA
-akan dibangun bersama modul penyelenggara sebelum akses panitia diaktifkan.
+Register publik tidak memberikan akses panitia. Admin pusat tersedia untuk
+pengujian lokal; tenancy sekolah, pemisahan tugas staf, dan MFA masih diperlukan
+sebelum portal panitia dibuka pada produksi.
 Email belum diverifikasi; verifikasi kepemilikan email wajib ditambahkan sebelum data
 pendaftaran nyata dikaitkan ke akun.
 **Seluruh perubahan pada modul registrasi diblokir pada `APP_ENV=production`.**
@@ -108,6 +109,81 @@ menampilkan kesalahan; pengelola menjalankan `php bin/cleanup-cancelled-document
 dengan `APP_STORAGE` yang sama untuk menuntaskan antrean.
 Penyimpanan draf, upload, dan pengiriman hanya diizinkan saat jadwal periode terbuka.
 Sesudah tenggat, draf dan tanda terima tetap dapat dibaca.
+
+## Admin pusat dan verifikasi peserta
+
+```sh
+php bin/admin.php seed
+```
+
+Perintah khusus development membuat akun uji `admin.pusat@example.test` dengan
+password acak yang ditampilkan sekali di terminal. Masuk melalui `/login`;
+akun diarahkan ke `/admin`. Simpan password secara privat, bukan di source code.
+Pengulangan tidak mereset password atau mempromosikan akun wali yang kebetulan
+memakai email tersebut. Jika lupa, gunakan pemulihan password. Tidak ada akun
+admin yang dibuat otomatis saat aplikasi dijalankan.
+
+Admin pusat memiliki akses **seluruh sekolah**, bukan hanya satu sekolah:
+
+- **Dashboard:** jumlah draf, terkirim, antrean verifikasi, valid, perlu perbaikan,
+  dan tidak valid; draf hanya dihitung, tidak dibuka untuk pemeriksaan.
+- **Verifikasi:** daftar pendaftaran terkirim dengan pencarian, filter sekolah /
+  periode dan status, paginasi 25 baris; lihat data snapshot serta dokumen privat
+  dan catat hasil **Valid / Perlu perbaikan / Tidak valid**.
+- **Master data:** sekolah, NPSN, kecamatan, periode, jadwal, jalur, dan persyaratan
+  termasuk periode diarsipkan. Dropdown **Periode pendaftaran / Sekolah** membuka
+  tabel masing-masing dengan pencarian, pagination 10 baris, detail, tambah, edit,
+  hapus terkonfirmasi, dan arsip/aktivasi.
+- **Akun admin:** daftar admin pusat hanya-baca; pembuatan akun uji lewat CLI.
+- **Audit:** 100 aktivitas terakhir; akses dokumen admin dan keputusan dicatat.
+
+Catatan verifikasi wajib 5–2000 karakter, terlihat oleh wali pada status dan
+tanda terima. Perubahan keputusan menyimpan reviewer, waktu, dan riwayat;
+optimistic locking menolak keputusan dari tab yang versinya kedaluwarsa.
+Verifikasi berkas bukan seleksi / keputusan diterima. Data terkirim dan snapshot
+aturan tidak diubah. **Perlu perbaikan belum membuka kunci atau pengiriman ulang**:
+wali diminta menghubungi panitia. Koreksi terkontrol merupakan tahap berikutnya.
+Admin dapat memeriksa pendaftaran terkirim dari periode diarsipkan juga.
+
+Peran disimpan pada tabel grant `admin_accounts` yang hanya dikelola CLI,
+terpisah dari akun wali; seluruh data pengguna lama dipertahankan tanpa membangun
+ulang tabel `users`. Register mengabaikan kiriman role. Pemeriksaan akses server
+berlaku untuk semua halaman admin dan dokumen (admin hanya dokumen aktif dari
+pendaftaran terkirim). Tidak ada promosi role lewat UI atau pengeditan data peserta
+oleh admin. **Portal admin, verifikasi, dan akses dokumen admin diblokir pada
+produksi** sampai MFA, email verification, dasar kewenangan dan operasional siap.
+
+### CRUD master sekolah dan periode
+
+- Sekolah menyimpan NPSN unik (8 digit), nama, jenjang, mode negeri/swasta, wilayah,
+  dan alamat. Data sekolah awal dihubungkan otomatis dari periode yang sudah ada,
+  termasuk data lama/arsip; bukan hanya 40 periode aktif. Snapshot sumber resmi
+  tidak diubah oleh CRUD.
+- Periode memilih sekolah, kode unik, tahun ajaran, jadwal/zona waktu, penyelenggara,
+  kontak, rujukan aturan, dan privasi. Editor mendukung tambah/hapus jalur serta
+  dokumen dengan kode, nama, deskripsi jalur, dan penandaan wajib/opsional.
+  Template negeri/swasta SD/SMP/SMA dapat mengganti isi editor setelah konfirmasi.
+  Batas tetap 1–20 jalur dan maksimal 10 dokumen/jalur; kode unik dan aturan jalur
+  negeri (tanpa prestasi SD) divalidasi server.
+- Periode baru disimpan sebagai **arsip** dan `is_demo=true`. Aktifkan melalui detail
+  setelah ditinjau. Ini hanya publikasi formulir pengujian, bukan pengesahan
+  penerimaan nyata. Akses produksi tetap diblokir.
+- Sekolah/periode yang **belum pernah dipakai pendaftaran** boleh diedit.
+  Perubahan identitas sekolah memperbarui konfigurasi periode terkait yang belum
+  dipakai; versi editor periode ikut dinaikkan. Jenjang/mode sekolah yang sudah
+  memiliki periode tidak dapat diganti sebelum periode tersebut dihapus.
+- Jika sekolah/periode telah dipakai, edit/hapus ditolak pada server. Penanda
+  pernah dipakai dipertahankan meskipun semua draf dibatalkan. Untuk aturan baru,
+  gunakan **Salin menjadi periode baru**, tentukan kode baru, kemudian edit hasilnya.
+  Pendaftaran/snapshot lama tetap utuh. Hapus sekolah hanya jika tidak memiliki
+  periode; hapus periode yang belum dipakai terlebih dahulu.
+- Arsip sekolah juga mengarsipkan seluruh periodenya; aktivasi sekolah tidak
+  otomatis mengaktifkan periode kembali. Periode tidak dapat diaktifkan untuk
+  sekolah diarsipkan. Data peserta tetap terbaca, perubahan/pengiriman diblokir.
+- Semua perubahan memakai CSRF, pengecekan admin, optimistic locking, transaksi,
+  dan audit. CLI import tetap tidak menimpa kode yang ada. Metadata master sekolah,
+  hubungan sekolah-periode, versi, dan penanda penggunaan ditambah tanpa mengubah
+  akun, dokumen, atau data pendaftaran lama.
 
 ### Ambil lokasi pada profil peserta
 
@@ -264,8 +340,9 @@ wajib saat mengirim ke SMP/SMA. Tidak ada verifikasi identitas nasional otomatis
 ### Dokumen privat
 
 Berkas disimpan dengan nama acak di `storage/documents/`, bukan folder publik.
-Endpoint `/documents/{id}` memeriksa sesi dan kepemilikan aplikasi; menebak ID tidak
-memberikan akses. Maksimal 2 MB/file dan 20 megapiksel/gambar, MIME/ekstensi diperiksa,
+Endpoint `/documents/{id}` memeriksa sesi dan kepemilikan aplikasi; admin pusat
+development hanya diizinkan membaca dokumen aktif dari pendaftaran terkirim.
+Menebak ID tidak memberikan akses. Maksimal 2 MB/file dan 20 megapiksel/gambar, MIME/ekstensi diperiksa,
 token CSRF wajib, dan hash SHA-256 diperiksa saat unduh dan pengiriman.
 PDF disajikan sebagai unduhan, bukan HTML/iframe aktif; gambar dapat dipratinjau.
 Atur `upload_max_filesize` minimal `2M` dan `post_max_size` minimal `4M`; respons
@@ -275,7 +352,8 @@ dalam 15 menit.
 Penggantian/penghapusan dokumen dari checklist mencabut akses ke versi lama, tetapi
 salinan privat dan metadata tetap disimpan untuk audit. Tidak ada pembersihan retensi
 otomatis pada tahap ini. Tentukan dan implementasikan retensi sebelum data nyata.
-Pemindaian malware/antivirus, enkripsi at-rest, dan verifikasi panitia belum tersedia.
+Pemindaian malware/antivirus dan enkripsi at-rest belum tersedia. Verifikasi
+manual panitia tersedia pada portal admin development, bukan validasi otomatis.
 
 ## Email pemulihan lokal
 
@@ -342,10 +420,17 @@ konfigurasi produksi yang tidak aman.
 Tes registrasi mencakup profil/draf, snapshot, validasi, idempotensi, konflik versi,
 isolasi wali, CSRF, upload valid/palsu/terlalu besar, replace/delete, integritas file,
 checklist wajib, tenggat, tanda terima, dan import konfigurasi.
+Tes admin mencakup grant peran CLI, register tanpa eskalasi peran, larangan
+pemeriksaan draf, akses dokumen, keputusan/catatan, konflik versi, riwayat,
+status wali dan snapshot tetap utuh, master 40 periode, serta blokir produksi.
+Tes master mencakup CRUD, NPSN/kode duplikat, validasi jalur/jadwal, pencarian dan
+pagination, konflik versi, propagasi identitas sekolah sebelum dipakai, arsip
+sekolah/periode, blokir hapus/edit setelah dipakai (termasuk draf dibatalkan), dan
+proteksi akses admin/produksi.
 
 ## Berikutnya
 
-Sesuai [PRD](prd.md): verifikasi email, tenancy dan hak akses staf/MFA, panel verifikasi
-panitia dengan perbaikan berkas, aturan penerimaan yang disetujui, seleksi, hasil,
+Sesuai [PRD](prd.md): verifikasi email, tenancy dan hak akses staf/MFA, alur koreksi
+dan pengiriman ulang berkas setelah verifikasi, aturan penerimaan yang disetujui, seleksi, hasil,
 sanggah, dan daftar ulang. Portal informasi publik lengkap juga belum tersedia;
 daftar periode pada tahap ini berada di area wali yang sudah login.

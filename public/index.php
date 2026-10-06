@@ -5,9 +5,19 @@ try {
     require dirname(__DIR__) . '/app/bootstrap.php';
     $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/';
     $user = currentUser($db);
+    if ($path === '/admin' || str_starts_with($path, '/admin/')) {
+        if (!$user) {
+            redirect('/login');
+        }
+        require dirname(__DIR__) . '/app/admin_controller.php';
+        exit;
+    }
     if ($path === '/dashboard' || preg_match('~\A/(participants|admissions|applications|documents)(/|$)~', $path)) {
         if (!$user) {
             redirect('/login');
+        }
+        if ($user['role'] === 'central_admin' && !str_starts_with($path, '/documents/')) {
+            redirect('/admin');
         }
         require dirname(__DIR__) . '/app/admission_controller.php';
         exit;

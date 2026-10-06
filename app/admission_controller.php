@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/admissions.php';
+require __DIR__ . '/admin.php';
 if ($path === '/participants/location') {
     require __DIR__ . '/location.php';
     handleLocationRequest($db, $config, (int) $user['id']);
@@ -38,6 +39,7 @@ $profiles = [];
 $applications = [];
 $periods = [];
 $events = [];
+$verification = null;
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($path === '/dashboard') {
@@ -92,6 +94,7 @@ try {
     }
     if (in_array($screen, ['application', 'receipt', 'cancel'], true)) {
         $application = ownedApplication($db, $applicationId, $userId);
+        $verification = applicationVerification($db, $applicationId);
         $period = admissionPeriod($db, $application['period_id']);
         if ($application['status'] === 'submitted') {
             $period['configuration'] = admissionData($application['rule_snapshot_json']);
@@ -113,9 +116,13 @@ try {
         }
     }
     if ($screen === 'document') {
+        $adminDocumentAccess = $user['role'] === 'central_admin';
+        if ($adminDocumentAccess && $config['environment'] !== 'development') {
+            throw new AdmissionProblem('Akses dokumen admin belum dibuka pada produksi.', 403);
+        }
         $statement = $db->prepare('SELECT d.* FROM application_documents d JOIN applications a ON a.id = d.application_id
-            WHERE d.id = ? AND d.deleted_at IS NULL AND a.user_id = ?');
-        $statement->execute([$documentId, $userId]);
+            WHERE d.id = ? AND d.deleted_at IS NULL AND (a.user_id = ? OR (CAST(? AS INTEGER) = 1 AND a.status = \'submitted\'))');
+        $statement->execute([$documentId, $userId, (int) $adminDocumentAccess]);
         $document = $statement->fetch();
         if (!$document) {
             throw new AdmissionProblem('Dokumen tidak ditemukan.', 404);
@@ -125,6 +132,9 @@ try {
             throw new RuntimeException('Dokumen tidak tersedia atau integritasnya gagal.');
         }
         applicationEvent($db, $document['application_id'], $userId, 'document_accessed');
+        if ($adminDocumentAccess) {
+            audit($db, 'admin.document_accessed', $userId);
+        }
         header('Content-Type: ' . $document['mime_type']);
         $disposition = $document['mime_type'] === 'application/pdf' || admissionQuery('download') === '1' ? 'attachment' : 'inline';
         header('Content-Disposition: ' . $disposition . '; filename="dokumen.' . pathinfo($document['storage_name'], PATHINFO_EXTENSION)
@@ -235,13 +245,16 @@ try {
 $statement = $db->prepare('SELECT * FROM participant_profiles WHERE user_id = ? ORDER BY updated_at DESC');
 $statement->execute([$userId]);
 $profiles = $statement->fetchAll();
-$statement = $db->prepare('SELECT a.*, p.school, p.academic_year, p.is_demo, p.timezone, COALESCE(v.enabled, 1) AS period_enabled FROM applications a
+$statement = $db->prepare('SELECT a.*, p.school, p.academic_year, p.is_demo, p.timezone, r.status AS verification_status, MIN(COALESCE(v.enabled, 1), COALESCE(s.enabled, 1)) AS period_enabled FROM applications a
     JOIN admission_periods p ON p.id = a.period_id LEFT JOIN admission_period_availability v ON v.period_id = p.id
+    LEFT JOIN application_verifications r ON r.application_id = a.id
+    LEFT JOIN period_school_links l ON l.period_id = p.id LEFT JOIN master_schools s ON s.id = l.school_id
     WHERE a.user_id = ? ORDER BY a.updated_at DESC');
 $statement->execute([$userId]);
 $applications = $statement->fetchAll();
 $periods = $db->query('SELECT p.* FROM admission_periods p LEFT JOIN admission_period_availability v ON v.period_id = p.id
-    WHERE COALESCE(v.enabled, 1) = 1 ORDER BY p.is_demo ASC, p.school COLLATE NOCASE, p.opens_at DESC')->fetchAll();
+    LEFT JOIN period_school_links l ON l.period_id = p.id LEFT JOIN master_schools s ON s.id = l.school_id
+    WHERE COALESCE(v.enabled, 1) = 1 AND COALESCE(s.enabled, 1) = 1 ORDER BY p.is_demo ASC, p.school COLLATE NOCASE, p.opens_at DESC')->fetchAll();
 $districts = [];
 foreach ($periods as $item) {
     $district = admissionData($item['config_json'])['district'] ?? '';
