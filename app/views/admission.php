@@ -48,7 +48,7 @@ function applicationCards(array $applications, bool $canCancel): void
     }
     echo '<div class="application-list">';
     foreach ($applications as $item) {
-        $student = admissionData($item['data_json']);
+        $student = admissionData($item['current_data_json']);
         ?>
         <article class="list-card">
             <div><span class="status-tag <?= $item['status'] === 'submitted' ? 'status-submitted' : '' ?>"><?= escape($item['status'] === 'submitted' ? 'Terkirim · ' . verificationLabel($item['verification_status']) : 'Draf') ?></span>
@@ -56,10 +56,11 @@ function applicationCards(array $applications, bool $canCancel): void
                 <?php if (!(int) $item['period_enabled']): ?><span class="status-tag">Periode diarsipkan · hanya baca</span><?php endif; ?>
                 <h3><?= escape($student['name'] ?: 'Peserta belum diisi') ?></h3>
                 <p><?= escape(admissionDisplayText($item['school'])) ?> · <?= escape($item['academic_year']) ?></p>
-                <small>Terakhir disimpan: <?= escape(admissionDate((int) $item['updated_at'], $item['timezone'])) ?></small>
+                <small>Terakhir disimpan: <?= escape(admissionDate((int) $item['current_saved_at'], $item['timezone'])) ?><?= (int)$item['current_revision'] ? ' · Revisi ' . (int)$item['current_revision'] : '' ?></small>
             </div>
             <div class="application-card-actions">
                 <a class="button button-outline" href="/applications/<?= escape($item['id']) ?><?= $item['status'] === 'submitted' ? '?step=4' : '' ?>"><?= $item['status'] === 'submitted' ? 'Lihat status' : (!(int) $item['period_enabled'] ? 'Lihat draf arsip' : 'Lanjutkan draf') ?> →</a>
+                <?php if ($item['status']==='submitted'): ?><a class="button button-outline" href="/applications/<?= escape($item['id']) ?>/corrections">Revisi / koreksi</a><?php endif; ?>
                 <?php if ($canCancel && $item['status'] === 'draft'): ?><a class="button button-outline button-danger" href="/applications/<?= escape($item['id']) ?>/cancel" aria-label="Batal pendaftaran <?= escape($student['name'] ?: 'Peserta belum diisi') ?>">Batal</a><?php endif; ?>
             </div>
         </article>
@@ -94,6 +95,7 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
     <a href="/participants"<?= in_array($screen, ['participants', 'profile'], true) ? ' aria-current="page"' : '' ?>>Profil peserta</a>
     <a href="/admissions"<?= in_array($screen, ['periods', 'new-application', 'application', 'receipt', 'cancel'], true) ? ' aria-current="page"' : '' ?>>Pendaftaran</a>
     <a href="/privacy">Privasi</a>
+    <a href="/applications/notifications">Notifikasi</a>
 </nav>
 </div>
 <main id="main" class="dashboard-main admission-main">
@@ -108,6 +110,7 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
     <?php if ($screen === 'dashboard'): ?>
         <p class="eyebrow">BERANDA PENDAFTAR</p><h1>Halo, <?= escape($user['name']) ?></h1>
         <p class="lead">Kelola profil peserta, lanjutkan draf, dan pantau pendaftaran Anda.</p>
+        <?php if ($unreadNotices): ?><section class="form-card"><h2>Notifikasi belum dibaca</h2><ul><?php foreach ($unreadNotices as $message): ?><li><a href="/applications/<?= escape($message['application_id']) ?>/corrections"><?= escape($message['message']) ?></a></li><?php endforeach; ?></ul><a href="/applications/notifications" class="button button-outline">Semua notifikasi</a></section><?php endif; ?>
         <div class="stats-grid">
             <div><span>Profil peserta</span><strong><?= count($profiles) ?></strong></div>
             <div><span>Draf pendaftaran</span><strong><?= count(array_filter($applications, fn(array $item): bool => $item['status'] === 'draft')) ?></strong></div>
@@ -210,6 +213,7 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
         $base = '/applications/' . $application['id']; ?>
         <div class="section-heading"><div><p class="eyebrow"><?= $screen === 'receipt' ? 'BUKTI PENGIRIMAN' : 'REGISTRASI PESERTA DIDIK' ?></p><h1><?= escape($title) ?></h1></div><span class="status-tag"><?= escape($application['status'] === 'submitted' ? 'Terkirim · ' . verificationLabel($verification['status'] ?? null) : 'Draf') ?></span></div>
         <p class="lead"><?= escape($period['school'] . ' · ' . $period['academic_year'] . ' · ' . $pathway['name']) ?></p>
+        <?php if ($application['status']==='submitted'): ?><div class="requirement-note"><h3>Kiriman awal tetap terkunci</h3><p>Jika panitia meminta koreksi, perbaiki hanya bagian terpilih pada halaman koreksi. Kiriman ulang menjadi revisi baru, tanpa mengubah tanda terima awal.</p><a href="<?= escape($base) ?>/corrections" class="button button-outline">Koreksi / riwayat revisi</a><a href="/applications/notifications" class="button button-outline">Notifikasi panitia</a></div><?php endif; ?>
         <?php if ($period['is_demo']): ?><div class="demo-banner">Belum dibuka untuk penerimaan nyata. Pendaftaran ini masih untuk pengujian.</div><?php endif; ?>
         <?php if ($screen === 'application' && $application['status'] === 'draft'): ?>
             <nav class="step-nav" aria-label="Langkah pendaftaran"><?php foreach ([1 => 'Data peserta', 2 => 'Wali & jalur', 3 => 'Dokumen', 4 => 'Tinjau & kirim'] as $number => $label): ?><a href="<?= escape($base . '?step=' . $number) ?>"<?= $step === $number ? ' aria-current="step"' : '' ?>><span><?= $number ?></span><?= escape($label) ?></a><?php endforeach; ?></nav>
@@ -265,6 +269,8 @@ $guardianKeys = ['guardian_name', 'relationship', 'phone', 'address', 'province'
                 <ol class="activity-list"><?php foreach ($events as $event): ?><li><strong><?= escape(match ($event['action']) {
                     'draft_created' => 'Draf dibuat', 'draft_saved' => 'Draf disimpan', 'document_uploaded' => 'Dokumen diunggah',
                     'document_removed' => 'Dokumen dihapus dari checklist', 'submitted' => 'Pendaftaran dikirim',
+                    'correction_requested' => 'Panitia meminta koreksi', 'correction_saved' => 'Draf koreksi disimpan',
+                    'correction_document_uploaded' => 'Berkas koreksi diunggah', 'correction_submitted' => 'Revisi dikirim ulang',
                 }) ?></strong><span><?= escape(admissionDate((int) $event['created_at'], $period['timezone'])) ?></span></li><?php endforeach; ?></ol>
             </section>
         <?php endif; ?>

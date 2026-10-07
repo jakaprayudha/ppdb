@@ -14,6 +14,7 @@ import admin_flow as admin_helpers
 import admission_flow as admission_helpers
 from auth_flow import Client, ROOT
 from staff_helpers import enroll_staff, mail_path, totp
+from review_helpers import review_payload
 
 
 class StaffFlow(unittest.TestCase):
@@ -92,7 +93,8 @@ class StaffFlow(unittest.TestCase):
     def assign(self, client, app, reviewer, version=0):
         path = "/admin/applications/" + app
         return client.request(path, {"csrf": client.csrf("/admin"), "action": "assign",
-                                     "reviewer_id": reviewer, "assignment_version": version})
+                                     "reviewer_id": reviewer, "assignment_version": version,
+                                     "assignment_note": "Penugasan/pengalihan untuk pengujian."})
 
     def test_invitations_collision_cancellation_expiry_and_roles(self):
         own, _ = self.schools()
@@ -193,7 +195,8 @@ class StaffFlow(unittest.TestCase):
         self.assertEqual((status, body), (200, admission_helpers.PNG))
         before = self.application(app)
         self.assertEqual(allowed.request("/admin/applications/" + app, {
-            "csrf": allowed.csrf("/admin"), "verification_version": "0", "decision": "valid", "note": "Dokumen sesuai."
+            "csrf": allowed.csrf("/admin"), "verification_version": "0", "decision": "valid", "note": "Dokumen sesuai.",
+            **review_payload(self,app),
         })[0], 303)
         self.assertEqual(self.application(app), before)
 
@@ -214,7 +217,7 @@ class StaffFlow(unittest.TestCase):
         self.assertEqual(verifier.request("/admin/applications/" + app)[0], 200)
         self.assertEqual(verifier.request("/admin/applications/" + app, {
             "csrf": verifier.csrf("/admin"), "action": "verify", "verification_version": "0",
-            "decision": "valid", "note": "Berkas sesuai pemeriksaan."
+            "decision": "valid", "note": "Berkas sesuai pemeriksaan.", **review_payload(self,app),
         })[0], 303)
         self.assertEqual(self.assign(verifier, app, reviewer_id, 1)[0], 403)
         self.assertEqual(self.assign(school_admin, app, 0, 1)[0], 303)

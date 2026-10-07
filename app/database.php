@@ -160,6 +160,67 @@ function database(string $storage): PDO
             reviewer_id INTEGER NOT NULL REFERENCES users(id),
             created_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS application_revisions (
+            id TEXT PRIMARY KEY,
+            application_id TEXT NOT NULL REFERENCES applications(id),
+            revision INTEGER NOT NULL,
+            data_json TEXT NOT NULL,
+            documents_json TEXT NOT NULL,
+            created_by INTEGER NOT NULL REFERENCES users(id),
+            submitted_at INTEGER NOT NULL,
+            UNIQUE(application_id,revision)
+        );
+        CREATE TABLE IF NOT EXISTS correction_requests (
+            id TEXT PRIMARY KEY,
+            application_id TEXT NOT NULL REFERENCES applications(id),
+            base_revision INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','submitted','expired')),
+            fields_json TEXT NOT NULL,
+            documents_json TEXT NOT NULL,
+            data_json TEXT NOT NULL,
+            document_ids_json TEXT NOT NULL,
+            opens_at INTEGER NOT NULL,
+            deadline INTEGER NOT NULL,
+            note TEXT NOT NULL,
+            requested_by INTEGER NOT NULL REFERENCES users(id),
+            version INTEGER NOT NULL DEFAULT 1,
+            created_at INTEGER NOT NULL,
+            submitted_at INTEGER,
+            submitted_revision INTEGER
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS correction_open_idx ON correction_requests(application_id) WHERE status='open';
+        CREATE TABLE IF NOT EXISTS correction_uploads (
+            request_id TEXT NOT NULL REFERENCES correction_requests(id),
+            document_id TEXT NOT NULL REFERENCES application_documents(id),
+            PRIMARY KEY(request_id,document_id)
+        );
+        CREATE TABLE IF NOT EXISTS detailed_reviews (
+            application_id TEXT PRIMARY KEY REFERENCES applications(id),
+            revision INTEGER NOT NULL DEFAULT 0,
+            version INTEGER NOT NULL,
+            checklist_json TEXT NOT NULL,
+            reviewer_id INTEGER NOT NULL REFERENCES users(id),
+            updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS detailed_review_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            application_id TEXT NOT NULL REFERENCES applications(id),
+            revision INTEGER NOT NULL,
+            checklist_json TEXT NOT NULL,
+            decision TEXT,
+            note TEXT NOT NULL,
+            reviewer_id INTEGER NOT NULL REFERENCES users(id),
+            created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS participant_notices (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            application_id TEXT NOT NULL REFERENCES applications(id),
+            message TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            read_at INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS notice_owner_idx ON participant_notices(user_id,created_at);
         CREATE TABLE IF NOT EXISTS master_schools (
             id TEXT PRIMARY KEY,
             npsn TEXT UNIQUE,
@@ -207,6 +268,19 @@ function database(string $storage): PDO
             assigned_by INTEGER NOT NULL REFERENCES users(id),
             updated_at INTEGER NOT NULL
         );
+        CREATE INDEX IF NOT EXISTS assignment_reviewer_idx ON verification_assignments(reviewer_id,application_id);
+        CREATE INDEX IF NOT EXISTS submitted_queue_idx ON applications(status,period_id,submitted_at,id);
+        CREATE TABLE IF NOT EXISTS assignment_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            application_id TEXT NOT NULL REFERENCES applications(id),
+            previous_reviewer_id INTEGER REFERENCES users(id),
+            reviewer_id INTEGER REFERENCES users(id),
+            actor_id INTEGER NOT NULL REFERENCES users(id),
+            action TEXT NOT NULL CHECK (action IN ('assign','claim','release','reassign','access_revoked')),
+            note TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS assignment_history_application_idx ON assignment_history(application_id,id);
         CREATE TABLE IF NOT EXISTS period_management (
             period_id TEXT PRIMARY KEY REFERENCES admission_periods(id),
             version INTEGER NOT NULL DEFAULT 1,

@@ -69,12 +69,18 @@ verifikasi email, aktif/nonaktif/perubahan peran dengan pencabutan sesi.
 Admin sekolah boleh menugaskan dan memeriksa peserta terkirim pada sekolahnya,
 tidak mengelola akun/master/audit global. Verifikator hanya memeriksa peserta yang
 ditugaskan kepadanya; pembatasan berlaku pada dashboard/list/filter/detail/POST
-dan dokumen. Penugasan verifikator dasar (bagian A-03) tersedia dengan cek versi.
+dan dokumen. A-03 tersedia: tabel/filter/sort/pagination, ringkasan antrean,
+penugasan/pengalihan/pelepasan ber-versi dan riwayat, indikator tenggat dari
+snapshot, serta tinjauan potensi duplikasi dalam cakupan akses. Verifikator boleh
+mengambil tugas kosong pada sekolahnya melalui ringkasan minimum tanpa identitas
+atau dokumen; akses detail terbuka hanya setelah transaksi berhasil.
 Akun uji dibuat CLI, bukan register publik. Hasil terlihat oleh wali tetapi bukan
 keputusan penerimaan; data terkirim tetap terkunci. A-02 tersedia pada development:
 tahun ajaran, rombel/kapasitas, kuota kursi, tujuh jadwal tahap, metadata/tautan
 Juknis dan paket berversi dengan persetujuan approver sekolah yang berbeda dari
-penyusun/pengaju. Koreksi/pengiriman ulang dan persetujuan hasil seleksi belum
+penyusun/pengaju. A-04 tersedia pada development: checklist rinci, koreksi terbatas
+dalam tahap Perbaikan snapshot, kirim ulang revisi tanpa menimpa kiriman awal,
+arsip berkas/keputusan dan notifikasi in-app. Seleksi/persetujuan hasil belum
 tersedia. Portal admin diblokir pada produksi.
 Dropdown master memisahkan Sekolah, Periode pendaftaran, Tahun ajaran dan Paket
 aturan operasional. Edit/hapus sekolah/periode hanya
@@ -264,8 +270,8 @@ Pilot sebaiknya mencakup sekurangnya satu sekolah negeri dan satu swasta pada sa
 
 ### 15.1 Roadmap lanjutan: admin terlebih dahulu
 
-**Status A-01 dan A-02: tersedia pada development; tahap lain masih rencana**, selain
-penugasan verifikator dasar dari A-03. Verifikasi email wajib untuk staf (undangan
+**Status A-01, A-02 dan A-03: tersedia pada development; tahap lain masih rencana**.
+Verifikasi email wajib untuk staf (undangan
 atau token admin lama), opsional untuk wali pada pilot. MFA TOTP pilihan staf maupun wali, nonaktif secara default,
 kode pemulihan sekali pakai dan rotasi autentikator tersedia. Persetujuan
 aturan sudah tersedia; persetujuan hasil, ekspor dan pemulihan privileged bila perangkat/kode hilang belum
@@ -284,8 +290,8 @@ yang seolah sudah menjalankan proses; modul muncul setelah alur lengkapnya siap.
 |---|---|---|---|
 | 1 / A-01 | **Akun, peran, dan akses sekolah (development):** undangan staf, aktivasi/nonaktif, penugasan satu/beberapa sekolah, hak per aksi, MFA staf dan verifikasi email. | Pemetaan kewenangan disepakati: pusat mengelola akun/master, admin sekolah menugaskan/memeriksa, verifikator hanya peserta yang ditugaskan. | Akses daftar/detail/dokumen/POST dibatasi server; staf sekolah A ditolak mengakses sekolah B meskipun mengganti URL/ID. Pencabutan akses membatalkan sesi dan melepas tugas; seluruh grant diaudit. Scope yang sama wajib digunakan saat ekspor tersedia. |
 | 2 / A-02 | **Master operasional (development):** tahun ajaran, rombel, kapasitas sekolah, kuota tiap jalur, tujuh tahap jadwal, metadata/tautan Juknis dan paket aturan berversi. | A-01; naskah Juknis dan pejabat harus ditentukan pengelola. | Total kursi jalur/rombel tepat kapasitas; ambang negeri tidak diterapkan otomatis ke swasta. Jadwal konflik ditolak. Approver sekolah berbeda dari penyusun/pengaju; aturan terbit tidak ditimpa. |
-| 3 / A-03 | **Manajemen pendaftar dan antrean:** tabel pencarian/filter/sort/pagination, penugasan verifikator, antrean belum ditugaskan/ditangani/terlambat, deteksi potensi duplikasi dan ringkasan kerja. | A-01. | Penugasan dan pengambilalihan tugas tercatat; konflik dua petugas ditolak dengan pesan jelas. Potensi duplikasi ditinjau manusia, tidak otomatis menghapus/menolak peserta. Draf tetap tidak dibuka untuk pemeriksaan staf. |
-| 4 / A-04 | **Verifikasi rinci dan koreksi terkontrol:** checklist per dokumen/kriteria jalur, alasan, permintaan perbaikan kolom/berkas tertentu, tenggat, kirim ulang dan pemeriksaan ulang. | A-02 untuk jadwal/aturan; A-03 untuk penugasan. | Snapshot kiriman pertama tetap utuh; koreksi menjadi revisi baru. Hanya bagian yang diminta dapat diperbaiki dalam tenggat; versi dokumen dan keputusan sebelumnya dapat ditelusuri. Wali dapat memperbaiki/kirim ulang; status dan notifikasi in-app konsisten. |
+| 3 / A-03 | **Manajemen pendaftar dan antrean (development):** tabel pencarian/filter/sort/pagination, penugasan/ambil tugas kosong, antrean belum ditugaskan/ditangani/terlambat, potensi duplikasi dan ringkasan kerja. | A-01; A-02 untuk tenggat yang diketahui. | Penugasan/pengambilalihan tercatat; konflik dua petugas ditolak. Potensi duplikasi hanya dalam scope pemeriksaan, ditinjau manusia, tanpa hapus/tolak otomatis. Draf tidak dibuka staf. |
+| 4 / A-04 | **Verifikasi rinci dan koreksi terkontrol (tersedia development):** checklist per dokumen/kriteria jalur, alasan, permintaan perbaikan kolom/berkas tertentu, tenggat, kirim ulang dan pemeriksaan ulang. | A-02 untuk jadwal/aturan; A-03 untuk penugasan. | Snapshot kiriman pertama tetap utuh; koreksi menjadi revisi baru. Hanya bagian yang diminta dapat diperbaiki dalam tenggat; versi dokumen dan keputusan sebelumnya dapat ditelusuri. Wali dapat memperbaiki/kirim ulang; status dan notifikasi in-app konsisten. |
 | 5 / A-05 | **Seleksi dan simulasi:** pemeriksaan kelayakan, input nilai/bukti bila berlaku, rubrik, skor, urutan prioritas, tie-break, kuota dan daftar cadangan. | A-02 dan A-04; metode seleksi disahkan. | Simulasi tidak mengubah hasil resmi. Run resmi memakai snapshot input/aturan dan menghasilkan alasan yang dapat direproduksi. Uji skor sama, batas kuota, pembulatan, peserta tidak layak dan kursi sisa; hasil tidak melampaui kapasitas. |
 | 6 / A-06 | **Persetujuan dan pengumuman hasil:** tinjau hasil, persetujuan dua pihak, penjadwalan publikasi, hasil personal diterima/cadangan/tidak diterima dan koreksi hasil berversi. | A-05; approver berbeda dari pengaju. | Hasil draft tidak terlihat oleh wali; publikasi hanya setelah persetujuan dan waktunya tiba. Penerbitan ulang tidak menggandakan keputusan; hasil personal tidak membocorkan peserta lain. Koreksi mencatat alasan, versi dan pemberitahuan. |
 | 7 / A-07 | **Sanggah dan pengaduan:** tiket, kategori, bukti, tenggat, penugasan, tanggapan dan eskalasi. | A-01 untuk pengaduan umum; A-06 untuk sanggah hasil. | Wali melihat tiketnya saja. Bukti privat, riwayat tanggapan dan tenggat tercatat; sanggah tidak langsung mengubah hasil. Perubahan keputusan kembali melalui persetujuan dan versi hasil. |
@@ -318,7 +324,7 @@ berikut. Jangan langsung menambah mesin ranking.
    Uji akses lintas sekolah, perubahan role/ID dari klien, undangan kedaluwarsa,
    pencabutan sesi, CSRF dan konflik versi; sediakan uji desktop/ponsel.
 
-A-01 dan A-02 selesai untuk pilot; berikutnya A-03/A-04 **antrean dan koreksi**.
+A-01 sampai A-04 selesai untuk pilot development; berikutnya A-05 **seleksi dan simulasi**.
 Pengembangan tetap menggunakan data uji.
 
 **Operasi A-01:** akun pusat lama wajib memverifikasi email sebelum portal terbuka,
@@ -384,6 +390,88 @@ yang harus disepakati kembali sebelum penerimaan nyata, bukan perilaku pilot saa
   Import/salin tidak membawa klaim persetujuan operational. Gate produksi tetap
   tertutup. Uji kapasitas/kuota/jadwal/CSRF/versi/scope/history/produksi tersedia
   pada tests/operational_flow.py dengan DB privat sementara.
+
+#### Operasi A-03: pendaftar dan antrean
+
+- Menu Pendaftar dan Antrean kerja, 25 baris/halaman; cari nama/nomor kiriman,
+  bukan seluruh JSON wali/alamat. Filter sekolah/periode/tahun/jalur/status/
+  verifikator/duplikasi, sort terlama/terbaru/nama/nomor/tenggat, pagination
+  mempertahankan filter. Daftar dan ringkasan hanya kiriman terkirim dalam scope.
+- Belum ditugaskan: belum ada keputusan dan petugas kosong. Sedang ditangani:
+  sudah ditugaskan, belum ada keputusan. Sudah diputuskan mencakup tiga keputusan
+  verifikasi, bukan hasil seleksi. Ringkasan mengikuti filter selain antrean/page.
+  Terlambat dapat tumpang tindih dengan dua antrean belum selesai.
+- Keputusan kebijakan: tenggat akhir verifikasi dari paket pada snapshot kiriman;
+  tanpa paket tampil “Tenggat belum diatur”. Tidak memakai SLA jam atau tanggal
+  penutupan pendaftaran sebagai fallback. Indikator bukan penolakan otomatis
+  atau pembatasan aksi setelah tenggat; penerapan koreksi rinci ada di A-04.
+- Verifikator dapat mengambil tugas kosong di sekolah grant aktifnya. Ringkasan
+  sebelum mengambil hanya nomor/periode/sekolah/jalur/waktu/tenggat, tanpa
+  identitas/dokumen/duplikasi. Grant/status/versi/petugas diperiksa lagi dalam
+  transaksi; dua pengambil menghasilkan satu sukses dan satu konflik 409.
+  Sesudah mengambil, akses detail/dokumen mengikuti penugasan biasa.
+- Admin pusat/sekolah boleh mengganti/melepas petugas sesuai scope; pengalihan/
+  pelepasan petugas yang sudah ada wajib catatan 5–2000 karakter. Riwayat internal
+  menyimpan petugas lama/baru, aktor, waktu, aksi dan catatan. Perubahan grant/
+  peran/nonaktif juga merekam pelepasan. Riwayat detail maksimal 50 terbaru;
+  tidak mengarang riwayat sebelum migrasi A-03.
+- NISN nonkosong sama ATAU nama/tanggal lahir nonkosong sama, pada tahun ajaran
+  sama, menandai potensi duplikasi. Nama dibandingkan tanpa kapital/spasi
+  berulang, bukan fuzzy. Pasangan hanya sesama kiriman dalam scope pemeriksaan;
+  verifikator tidak mendapatkan tanda atau tautan dari tugas petugas lain.
+  Detail maksimal 25 pasangan dengan alasan, tinjauan manual melalui dokumen
+  dan catatan verifikasi. Tidak menghapus/menolak otomatis dan belum ada status
+  penyelesaian temuan duplikasi tersendiri. Daftar lintas periode bukan otomatis
+  pelanggaran; kebijakan pilihan sekolah tetap memerlukan Juknis.
+- Skema/indeks aditif; snapshot/data peserta tetap utuh. Tes HTTP memakai DB
+  sementara: konflik pengambilan, CSRF, grant/dokumen/riwayat, filter/pagination,
+  duplikasi/tahun, tenggat dan produksi. Pencocokan saat baca belum memiliki
+  indeks identitas khusus atau uji beban produksi. Gate produksi tetap tertutup.
+
+#### Operasi A-04: checklist, koreksi dan revisi
+
+- Checklist semua dokumen jalur ditambah empat kriteria tetap: identitas,
+  domisili, kelayakan jalur dan konsistensi data. Status Belum diperiksa, Valid,
+  Perlu perbaikan, Tidak valid atau Tidak berlaku. Catatan item diperiksa
+  5–2000 karakter; Belum diperiksa boleh kosong. Tidak berlaku hanya untuk
+  dokumen opsional yang tidak ada, bukan kriteria wajib/dokumen yang diunggah.
+- Valid mensyaratkan seluruh item Valid/Tidak berlaku yang sah. Perlu perbaikan/
+  Tidak valid harus mempunyai item dengan status yang sama. Simpan checklist
+  saja tidak mengambil keputusan; setelah keputusan, perubahan harus bersama
+  keputusan untuk menjaga konsistensi. Kelayakan manual, bukan seleksi otomatis.
+- Minta koreksi terbatas hanya pada kriteria/dokumen Perlu perbaikan; pilih kolom/
+  berkas spesifik dan alasan 5–2000 karakter. Jalur, periode, aturan dan nomor
+  terkunci. Keputusan Perlu perbaikan biasa tidak otomatis membuka koreksi.
+  Satu permintaan terbuka per kiriman; penugasan verifikator tetap.
+- Kebijakan disepakati: permintaan, simpan, unggah dan kirim ulang **hanya**
+  selama tahap Perbaikan dari paket pada snapshot, awal inklusif/akhir eksklusif.
+  Tenggat otomatis akhir tahap, tanpa fallback/perpanjangan manual. Kiriman
+  tanpa paket tetap dapat diperiksa, tetapi tidak dapat membuka koreksi.
+  Gunakan periode baru disetujui untuk alur tersebut. Arsip katalog tidak
+  mengubah jadwal snapshot. Selama permintaan terbuka panitia menunggu wali;
+  sesudah tenggat dapat memutuskan versi terkirim terakhir dan menutup permintaan.
+- Wali hanya mengubah kolom/berkas yang dipilih. Validasi lengkap tetap berlaku;
+  setiap kolom terpilih harus berubah dan setiap berkas terpilih diunggah ulang.
+  Simpan draf eksplisit tanpa autosave, unggahan privat PDF/JPG/PNG maksimal
+  2 MB dengan validasi jenis/ukuran/integritas yang sama dengan kiriman awal.
+  Simpan/unggah ber-versi; kirim ulang idempoten dan transaksional.
+- Kirim ulang membuat revisi immutable, reset checklist dan keputusan aktif
+  menjadi menunggu pemeriksaan ulang; riwayat keputusan tidak dihapus. Data/
+  dokumen awal, profil peserta, snapshot, nomor dan tanda terima awal tetap utuh.
+  Panitia/wali dapat melihat arsip revisi hanya baca dan riwayat 50 terakhir.
+  Tidak mengarang checklist keputusan sebelum A-04. Kartu/antrean/duplikasi
+  memakai revisi terkirim terbaru, tidak memakai draf koreksi.
+- Staf mengikuti scope sekolah/penugasan untuk revisi dan berkas yang terkirim;
+  tidak dapat membuka berkas draf koreksi. Wali hanya miliknya. Pengganti tidak
+  menghapus berkas versi sebelumnya. Retensi fisik tetap memerlukan kebijakan A-11.
+- Notifikasi in-app persisten untuk permintaan, kirim ulang dan keputusan;
+  dashboard lima belum dibaca, halaman notifikasi 50 terakhir, tandai dibaca
+  hanya pemilik. Catatan pemeriksaan terlihat wali; catatan penugasan A-03 tetap
+  internal. Email/SMS/WhatsApp belum dikirim otomatis.
+- Skema aditif, CSRF/izin/versi diperiksa dalam mutasi, produksi tetap diblokir.
+  Tes HTTP privat mencakup checklist/keputusan, revisi berulang, batas waktu,
+  tanpa paket, scope/dokumen/notifikasi, konflik versi, upload/integritas,
+  original tetap utuh dan pemeriksaan ulang. Valid bukan keputusan diterima.
 
 #### Rencana pengelompokan menu admin
 

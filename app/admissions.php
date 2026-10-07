@@ -291,7 +291,7 @@ function cancelApplication(PDO $db, string $storage, string $id, int $userId, in
     cleanupCancelledDocuments($db, $storage);
 }
 
-function storeApplicationDocument(PDO $db, array $config, string $id, int $userId, int $version, string $kind, array $file): void
+function prepareApplicationUpload(array $config, array $file): array
 {
     $error = $file['error'] ?? UPLOAD_ERR_NO_FILE;
     if ($error !== UPLOAD_ERR_OK) {
@@ -348,6 +348,13 @@ function storeApplicationDocument(PDO $db, array $config, string $id, int $userI
     $documentId = bin2hex(random_bytes(16));
     $storageName = $documentId . '.' . $extensions[$mime];
     $destination = $directory . '/' . $storageName;
+    return compact('temporary','documentId','storageName','destination','name','mime','size');
+}
+
+function storeApplicationDocument(PDO $db, array $config, string $id, int $userId, int $version, string $kind, array $file): void
+{
+    ['temporary'=>$temporary,'documentId'=>$documentId,'storageName'=>$storageName,'destination'=>$destination,
+        'name'=>$name,'mime'=>$mime,'size'=>$size] = prepareApplicationUpload($config, $file);
     try {
         admissionTransaction($db, function () use ($db, $id, $userId, $version, $kind, $temporary, $destination, $documentId, $storageName, $name, $mime, $size): void {
             $application = ownedApplication($db, $id, $userId);

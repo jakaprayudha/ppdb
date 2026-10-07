@@ -13,6 +13,7 @@ import admission_flow as admission_helpers
 import auth_flow as auth_helpers
 from auth_flow import Client, ROOT
 from staff_helpers import complete_central_security
+from review_helpers import review_payload
 
 
 class AdminFlow(unittest.TestCase):
@@ -62,7 +63,8 @@ class AdminFlow(unittest.TestCase):
         path = "/admin/applications/" + app_id
         return self.admin.request(path, {
             "csrf": csrf if csrf is not None else self.admin.csrf(path),
-            "verification_version": version, "decision": status, "note": note
+            "verification_version": version, "decision": status, "note": note,
+            **review_payload(self,app_id,status),
         })
 
     def test_role_guards_and_admin_navigation(self):

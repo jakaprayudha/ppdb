@@ -205,20 +205,45 @@ function updateStaff(PDO $db, int $actor, int $id, int $version, string $role, a
             $insert->execute([$id, $school]);
         }
         $db->prepare('UPDATE users SET auth_version=auth_version+1 WHERE id=?')->execute([$id]);
-        $db->prepare('UPDATE verification_assignments SET reviewer_id=NULL,version=version+1,assigned_by=?,updated_at=?
-            WHERE reviewer_id=?')->execute([$actor, time(), $id]);
+        releaseVerifierAssignments($db, $id, $actor);
         audit($db, 'admin.staff_updated:' . $id, $actor);
     });
 }
 
-function assignVerifier(PDO $db, array $actor, string $applicationId, int $reviewer, int $version): void
+function assignmentEvent(PDO $db, string $id, ?int $previous, ?int $reviewer, int $actor, string $action, string $note): void
 {
-    admissionTransaction($db, function () use ($db, $actor, $applicationId, $reviewer, $version): void {
+    $db->prepare('INSERT INTO assignment_history(application_id,previous_reviewer_id,reviewer_id,actor_id,action,note,created_at)
+        VALUES(?,?,?,?,?,?,?)')->execute([$id, $previous, $reviewer, $actor, $action, $note, time()]);
+}
+
+function releaseVerifierAssignments(PDO $db, int $reviewer, int $actor): void
+{
+    $statement = $db->prepare('SELECT application_id FROM verification_assignments WHERE reviewer_id=?');
+    $statement->execute([$reviewer]);
+    foreach ($statement->fetchAll(PDO::FETCH_COLUMN) as $id) {
+        assignmentEvent($db, $id, $reviewer, null, $actor, 'access_revoked', 'Tugas dilepas karena perubahan akses/peran staf.');
+    }
+    $db->prepare('UPDATE verification_assignments SET reviewer_id=NULL,version=version+1,assigned_by=?,updated_at=?
+        WHERE reviewer_id=?')->execute([$actor, time(), $reviewer]);
+}
+
+function assignVerifier(PDO $db, array $actor, string $applicationId, int $reviewer, int $version, string $note = '', bool $claim = false): void
+{
+    admissionTransaction($db, function () use ($db, $actor, $applicationId, $reviewer, $version, $note, $claim): void {
         $actor = staffIdentity($db, (int) $actor['id']);
-        if (!in_array($actor['role'], ['central_admin', 'school_admin'], true)) {
+        if ($claim && $actor['role'] === 'verifier' && $reviewer === (int) $actor['id']) {
+            [$scope, $parameters] = staffScope($actor, 'l.school_id');
+            $statement = $db->prepare("SELECT 1 FROM applications a JOIN period_school_links l ON l.period_id=a.period_id
+                WHERE a.id=? AND a.status='submitted' AND ($scope)");
+            $statement->execute([$applicationId, ...$parameters]);
+            if (!$statement->fetchColumn()) {
+                throw new AdmissionProblem('Tugas tidak ditemukan atau di luar sekolah Anda.', 404);
+            }
+        } elseif (!$claim && in_array($actor['role'], ['central_admin', 'school_admin'], true)) {
+            authorizeStaffApplication($db, $actor, $applicationId);
+        } else {
             throw new AdmissionProblem('Hanya admin pusat/sekolah yang dapat menugaskan verifikator.', 403);
         }
-        authorizeStaffApplication($db, $actor, $applicationId);
         $statement = $db->prepare('SELECT l.school_id FROM applications a JOIN period_school_links l ON l.period_id=a.period_id WHERE a.id=?');
         $statement->execute([$applicationId]);
         $schoolId = $statement->fetchColumn();
@@ -230,15 +255,38 @@ function assignVerifier(PDO $db, array $actor, string $applicationId, int $revie
                 throw new AdmissionProblem('Pilih verifikator aktif yang ditugaskan ke sekolah peserta.', 422);
             }
         }
-        $statement = $db->prepare('SELECT version FROM verification_assignments WHERE application_id=?');
+        $statement = $db->prepare('SELECT version,reviewer_id FROM verification_assignments WHERE application_id=?');
         $statement->execute([$applicationId]);
-        if ((int) $statement->fetchColumn() !== $version) {
+        $current = $statement->fetch();
+        if ((int) ($current['version'] ?? 0) !== $version) {
             throw new AdmissionProblem('Penugasan sudah berubah. Muat ulang peserta.', 409);
+        }
+        $previous = isset($current['reviewer_id']) ? (int) $current['reviewer_id'] : null;
+        if ($claim) {
+            $statement = $db->prepare('SELECT 1 FROM application_verifications WHERE application_id=?');
+            $statement->execute([$applicationId]);
+            if ($previous !== null || $statement->fetchColumn()) {
+                throw new AdmissionProblem('Tugas sudah diambil atau sudah memiliki keputusan. Muat ulang antrean.', 409);
+            }
+            $note = 'Verifikator mengambil tugas kosong di sekolahnya.';
+        } else {
+            $note = trim($note);
+            if ($previous !== null && $previous !== ($reviewer ?: null) && mb_strlen($note) < 5) {
+                throw new AdmissionProblem('Catatan pengalihan/pelepasan wajib 5–2000 karakter.', 422);
+            }
+            if (mb_strlen($note) > 2000 || preg_match('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', $note)) {
+                throw new AdmissionProblem('Catatan penugasan tidak valid (maksimal 2000 karakter).', 422);
+            }
+            if ($note === '') {
+                $note = 'Penugasan verifikator oleh admin.';
+            }
         }
         $db->prepare('INSERT INTO verification_assignments(application_id,reviewer_id,assigned_by,updated_at) VALUES(?,?,?,?)
             ON CONFLICT(application_id) DO UPDATE SET reviewer_id=excluded.reviewer_id,assigned_by=excluded.assigned_by,
             updated_at=excluded.updated_at,version=verification_assignments.version+1')
             ->execute([$applicationId, $reviewer ?: null, $actor['id'], time()]);
+        assignmentEvent($db, $applicationId, $previous, $reviewer ?: null, (int) $actor['id'],
+            $claim ? 'claim' : ($reviewer === 0 ? 'release' : ($previous !== null ? 'reassign' : 'assign')), $note);
         applicationEvent($db, $applicationId, (int) $actor['id'], 'verifier_assigned');
         audit($db, 'admin.verifier_assigned:' . $applicationId . ':' . $reviewer, (int) $actor['id']);
     });

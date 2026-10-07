@@ -134,11 +134,13 @@ Admin pusat memiliki akses **seluruh sekolah**, bukan hanya satu sekolah:
 
 - **Dashboard:** jumlah draf, terkirim, antrean verifikasi, valid, perlu perbaikan,
   dan tidak valid; draf hanya dihitung, tidak dibuka untuk pemeriksaan.
-- **Verifikasi:** daftar pendaftaran terkirim dengan pencarian, filter sekolah /
-  periode dan status, paginasi 25 baris; lihat data snapshot serta dokumen privat
+- **Pendaftar / Antrean kerja:** tabel kiriman dengan pencarian nama/nomor,
+  filter sekolah/periode/tahun/jalur/status/verifikator/duplikasi, sort dan
+  pagination 25 baris; lihat data snapshot serta dokumen privat
   dan catat hasil **Valid / Perlu perbaikan / Tidak valid**.
 - **Master data:** sekolah, NPSN, kecamatan, periode, jadwal, jalur, dan persyaratan
-  termasuk periode diarsipkan. Dropdown **Periode pendaftaran / Sekolah** membuka
+  termasuk periode diarsipkan. Dropdown **Periode pendaftaran / Sekolah / Tahun
+  ajaran / Paket aturan operasional** membuka
   tabel masing-masing dengan pencarian, pagination 10 baris, detail, tambah, edit,
   hapus terkonfirmasi, dan arsip/aktivasi.
 - **Akun & akses:** daftar admin pusat hanya-baca, undangan staf, daftar staf
@@ -152,8 +154,8 @@ Catatan verifikasi wajib 5–2000 karakter, terlihat oleh wali pada status dan
 tanda terima. Perubahan keputusan menyimpan reviewer, waktu, dan riwayat;
 optimistic locking menolak keputusan dari tab yang versinya kedaluwarsa.
 Verifikasi berkas bukan seleksi / keputusan diterima. Data terkirim dan snapshot
-aturan tidak diubah. **Perlu perbaikan belum membuka kunci atau pengiriman ulang**:
-wali diminta menghubungi panitia. Koreksi terkontrol merupakan tahap berikutnya.
+aturan tidak diubah. **Perlu perbaikan biasa tidak membuka data**; panitia harus
+memakai **Minta koreksi terbatas** dengan pilihan kolom/berkas dan alasan.
 Admin dapat memeriksa pendaftaran terkirim dari periode diarsipkan juga.
 
 Grant pusat tetap pada `admin_accounts`, dikelola CLI. Staf pada `staff_accounts`
@@ -169,7 +171,7 @@ pengamanan berkas dan operasional dinyatakan siap; adanya MFA tidak membuka gate
 |---|---|
 | Admin pusat | Kelola akun/master, dashboard seluruh sekolah, penugasan verifikator, pemeriksaan peserta dan audit global. Akun pusat tidak dapat dibuat/diubah lewat formulir staf. |
 | Admin sekolah | Dashboard/daftar/pemeriksaan peserta terkirim serta penugasan verifikator pada sekolah yang ditugaskan. Tidak boleh mengubah master, mengelola akun atau membaca audit global. |
-| Verifikator | Dashboard/daftar/pemeriksaan hanya peserta terkirim yang ditugaskan kepadanya, pada sekolah yang termasuk grant aktifnya. |
+| Verifikator | Dashboard/daftar/detail/dokumen hanya kiriman yang ditugaskan dalam grant sekolah aktifnya. Antrean tugas kosong sekolah menampilkan ringkasan minimum untuk mengambil tugas, bukan identitas/dokumen. |
 
 Satu staf dapat menangani beberapa sekolah. Pembatasan berlaku pada query
 dashboard/filter/pagination, GET detail, POST keputusan/penugasan dan unduh
@@ -178,7 +180,106 @@ aktif dari sekolah peserta dapat dipilih pada **Penugasan verifikator** di detai
 peserta oleh admin pusat/sekolah; konflik versi penugasan ditolak.
 Menu ekspor belum tersedia dan tidak ditambahkan sebagai placeholder.
 
-Alur penggunaan:
+### Tahap 3: pendaftar dan antrean kerja
+
+Menu **Pendaftar** memuat semua kiriman yang boleh diperiksa; **Antrean kerja**
+langsung membuka belum ditugaskan untuk admin atau tugas sedang ditangani untuk
+verifikator. Draf tidak dapat dilihat/diperiksa staf.
+
+- Tabel, pencarian **nama peserta/nomor pendaftaran**, filter sekolah/periode,
+  tahun ajaran, jalur, status verifikasi, verifikator (admin), jenis antrean dan
+  potensi duplikasi. Pencarian tidak lagi mencocokkan seluruh JSON alamat/wali.
+  Urutan kiriman terlama (default), terbaru, nama, nomor atau tenggat; 25 baris
+  per halaman, filter/sort dipertahankan saat pindah halaman.
+- Ringkasan mengikuti filter selain jenis antrean/pagination: total, belum
+  ditugaskan, sedang ditangani (sudah ditugaskan tetapi belum ada keputusan),
+  terlambat, sudah diputuskan dan potensi duplikasi. Angka terlambat dapat
+  tumpang tindih dengan belum ditugaskan/sedang ditangani, bukan kategori total
+  kursi. Keputusan verifikasi bukan hasil seleksi.
+- **Terlambat** berarti belum memiliki keputusan dan sudah melewati akhir tahap
+  verifikasi dari paket dalam snapshot kiriman. Periode pilot tanpa paket
+  bertuliskan **Tenggat belum diatur**, tidak ditebak dari waktu kirim atau
+  penutupan pendaftaran. Tidak ada SLA jam otomatis atau penolakan lewat tenggat.
+  Jadwal ini indikator antrean, belum membatasi aksi verifikasi.
+- **Ambil tugas kosong:** verifikator melihat nomor kiriman, sekolah/periode/
+  jalur serta waktu/tenggat pada sekolah yang ditugaskan. Nama, data wali,
+  duplikasi dan dokumen tidak ditampilkan sebelum berhasil mengambil tugas.
+  POST ber-CSRF mengecek ulang grant, status terkirim, belum ada keputusan,
+  verifikator aktif dan versi penugasan di transaksi. Hanya satu petugas menang;
+  petugas lain mendapat konflik 409, bukan mengambil alih diam-diam.
+- Admin pusat/sekolah dapat menugaskan, mengalihkan atau melepas di detail.
+  Perubahan penanggung jawab yang sudah ada membutuhkan catatan 5–2000 karakter.
+  Riwayat menyimpan aktor, petugas sebelumnya/baru, aksi, waktu dan catatan
+  internal (tidak terlihat wali). Perubahan akses staf melepas tugas dan mencatat
+  riwayat; tugas yang dilepas kembali muncul jika masih belum diputuskan.
+  Riwayat rinci dimulai A-03, tidak mengarang peristiwa penugasan lama.
+- **Potensi duplikasi:** NISN nonkosong sama, atau nama + tanggal lahir nonkosong
+  sama pada tahun ajaran sama. Nama dibandingkan tanpa perbedaan kapital dan
+  spasi berulang; tidak menggunakan fuzzy matching. Perbandingan hanya kiriman
+  terkirim dalam cakupan pemeriksaan pengguna: admin sesuai sekolah, verifikator
+  sesuai tugas. Data sekolah/tugas lain tidak dipakai untuk membocorkan pasangan.
+  Detail menampilkan maksimal 25 tautan kiriman terkait dan alasan kesamaan.
+  Identitas sama lintas periode belum tentu pelanggaran; panitia meninjau
+  dokumen dan mencatat temuan dalam verifikasi, tidak otomatis menolak/menghapus.
+  Belum ada status terpisah untuk menyatakan temuan duplikasi “selesai ditinjau”.
+
+**Cara mencoba:** admin membuka Antrean kerja → pilih peserta → tugaskan
+verifikator, atau verifikator membuka **Ambil tugas kosong** → **Ambil tugas** →
+periksa detail/dokumen → simpan keputusan. Filter verifikator/status di Pendaftar
+memantau beban dan pekerjaan selesai. Pengalihan tugas hanya oleh admin yang
+berwenang, bukan verifikator lain.
+
+Skema/indeks/riwayat ditambahkan tanpa mengubah snapshot, akun atau dokumen lama.
+Antrean tetap development-only; ini bukan gate produksi. Koreksi tersedia lewat
+detail pemeriksaan A-04 di bawah.
+
+### A-04: verifikasi rinci dan koreksi terkontrol
+
+1. Panitia membuka detail peserta dari Pendaftar/Antrean. Checklist mencakup
+   setiap dokumen jalur, identitas, domisili, kelayakan jalur dan konsistensi data.
+   Item diperiksa wajib catatan 5–2000 karakter; item belum diperiksa boleh kosong.
+   Simpan checklist saja tidak memutuskan status. Sesudah ada keputusan,
+   perubahan checklist harus disimpan bersama keputusan agar keduanya konsisten.
+2. **Valid** mensyaratkan seluruh item Valid, kecuali dokumen opsional yang tidak
+   ada memakai Tidak berlaku. Dokumen hilang tidak dapat Valid. Perlu perbaikan/
+   Tidak valid mensyaratkan setidaknya satu item dengan status yang sama.
+   Kelayakan diperiksa manusia sesuai Juknis, bukan rumus/ranking otomatis.
+3. Untuk koreksi, pilih Perlu perbaikan pada kriteria/berkas terkait, isi alasan
+   pada kolom/berkas tertentu, lalu Minta koreksi terbatas. Jalur, periode dan
+   aturan tidak dapat dipilih untuk koreksi. Satu permintaan terbuka per peserta.
+4. Wali melihat Notifikasi atau Revisi / koreksi pada kartu pendaftaran, mengubah
+   hanya kolom terpilih, menyimpan draf, mengunggah pengganti yang diminta, lalu
+   menyetujui pernyataan dan Kirim ulang revisi. Semua kolom terpilih harus
+   berbeda dari versi dasar dan semua dokumen terpilih harus diunggah ulang.
+   Tidak ada autosave; unggahan PDF/JPG/PNG maksimal 2 MB mengikuti validasi
+   unggahan awal. Kirim ulang idempoten, draf/unggahan memakai konflik versi.
+5. Permintaan, simpan, unggah dan kirim ulang hanya selama tahap **Perbaikan
+   dari snapshot paket aturan**: awal inklusif, akhir eksklusif. Tenggat otomatis
+   akhir tahap, tanpa perpanjangan manual. Kiriman lama tanpa paket tetap bisa
+   diverifikasi tetapi tidak bisa membuka koreksi; gunakan periode baru dengan
+   paket disetujui. Arsip katalog tidak mengganti tenggat snapshot.
+6. Kirim ulang menghasilkan revisi baru, menghapus keputusan *aktif* agar kembali
+   menunggu pemeriksaan, serta mereset checklist; riwayat keputusan tetap ada.
+   Penugasan petugas tidak berubah. Selama koreksi terbuka, panitia menunggu
+   kiriman wali; sesudah tenggat panitia dapat memutuskan versi terkirim terakhir.
+7. Detail panitia/wali menyediakan revisi terbaru, arsip hanya baca dan riwayat
+   checklist/permintaan (50 terakhir). Kiriman awal, profil, berkas awal, nomor,
+   snapshot aturan dan tanda terima awal tidak ditimpa. Kartu, antrean dan
+   pencocokan duplikasi memakai data revisi terkirim terbaru, bukan draf koreksi.
+   Keputusan lama tidak dibuatkan checklist fiktif.
+8. Berkas revisi privat: wali hanya miliknya; staf sesuai scope sekolah/penugasan
+   hanya berkas versi yang sudah terkirim, bukan unggahan draf koreksi.
+   Penggantian menyimpan versi berkas sebelumnya. Notifikasi SQLite persisten
+   untuk permintaan, kirim ulang dan keputusan, dapat ditandai dibaca oleh
+   pemilik; dashboard menampilkan lima belum dibaca, pusat notifikasi 50 terakhir.
+   Catatan pemeriksaan terlihat wali; tidak ada email/SMS otomatis.
+
+Seluruh mutasi tetap development-only dengan CSRF, otorisasi dan transaksi.
+Valid tetap bukan keputusan diterima; seleksi merupakan A-05.
+Pencocokan duplikasi sekarang dihitung dari snapshot kiriman saat membuka antrean;
+indeks identitas khusus dan uji beban skala produksi belum tersedia.
+
+### Menyiapkan akun staf dan profil keamanan
 
 1. Admin lama: buka **Profil akun → Kirim tautan verifikasi**. Dengan
    `MAIL_TRANSPORT=file`, tautan berada di berkas `.eml` privat terbaru dalam
@@ -588,15 +689,26 @@ ambang negeri dengan kursi bulat, swasta tanpa ambang negeri, overlap/urutan tah
 validitas/masa berlaku Juknis, sumber berubah, CSRF/versi, isolasi approver,
 pengembalian/persetujuan/penerbitan, pencabutan hak, versi berikutnya, snapshot
 kiriman, integritas, gate katalog/CLI/produksi dan rombel tanpa JavaScript.
+Tes antrean mencakup pengambilan dua petugas, cakupan sekolah/penugasan, ringkasan
+minimum sebelum mengambil tugas, akses detail/dokumen setelah mengambil,
+penugasan/pengalihan/pelepasan/pencabutan dengan riwayat, CSRF/konflik versi,
+duplikasi NISN/nama/tanggal lahir/tahun tanpa keputusan otomatis, tenggat snapshot,
+periode tanpa tenggat, filter/sort/pagination tepat 25 baris dan gate produksi.
+Tes koreksi mencakup kelengkapan/status/catatan checklist, keputusan konsisten,
+scope dan konflik versi, pembatasan kolom/dokumen, kirim ulang berulang/idempoten,
+snapshot/berkas awal tetap utuh, reset keputusan dan pemeriksaan ulang, arsip
+periode, batas waktu tanpa paket/kedaluwarsa, notifikasi pemilik, CSRF/produksi,
+upload palsu/terlalu besar dan integritas file.
 
 ## Berikutnya
 
 ### Roadmap admin-first
 
-**A-01 dan A-02 tersedia untuk pengujian development**: undangan staf, grant sekolah,
+**A-01 sampai A-04 tersedia untuk pengujian development**: undangan staf, grant sekolah,
 2FA/email verification, akun/sesi, tahun ajaran dan paket operasional dengan
-kapasitas/kuota/jadwal/Juknis/persetujuan. Penugasan verifikator
-dasar dari A-03 juga tersedia; pengelolaan antrean lengkap belum. Tahap lain tetap
+kapasitas/kuota/jadwal/Juknis/persetujuan, tabel pendaftar, antrean dan penugasan
+verifikator dengan tinjauan potensi duplikasi, checklist dan koreksi/revisi
+terbatas dengan notifikasi in-app. Tahap lain tetap
 backlog, bukan fitur aktif. Rincian scope, prasyarat, kriteria penerimaan, rancangan
 menu dan keputusan kebijakan ada di [PRD bagian 15.1](prd.md#151-roadmap-lanjutan-admin-terlebih-dahulu).
 
@@ -604,8 +716,8 @@ menu dan keputusan kebijakan ada di [PRD bagian 15.1](prd.md#151-roadmap-lanjuta
 |---|---|---|
 | 1 / A-01 | Akun, peran & akses sekolah (tersedia pada development) | Undangan staf, penugasan sekolah, izin aksi, pencabutan akses/sesi, 2FA opsional dan verifikasi email. Grant approver aturan aktif. |
 | 2 / A-02 | Master operasional & aturan (tersedia pada development) | Tahun ajaran, rombel, daya tampung, kuota jalur, jadwal tiap tahap, metadata/tautan Juknis, versi dan persetujuan paket aturan. |
-| 3 / A-03 | Pendaftar & antrean | Tabel/filter/sort, penugasan verifikator, antrean kerja dan tinjauan potensi duplikasi. |
-| 4 / A-04 | Verifikasi rinci & koreksi | Checklist per berkas/kriteria, permintaan perbaikan terbatas, tenggat, revisi dan kirim ulang tanpa menimpa snapshot awal. |
+| 3 / A-03 | Pendaftar & antrean (tersedia pada development) | Tabel/filter/sort/pagination, riwayat penugasan, ambil tugas kosong, antrean/tenggat snapshot dan tinjauan potensi duplikasi. |
+| 4 / A-04 | Verifikasi rinci & koreksi (tersedia pada development) | Checklist per berkas/kriteria, permintaan perbaikan terbatas, tenggat snapshot, revisi dan kirim ulang tanpa menimpa snapshot awal; notifikasi in-app. |
 | 5 / A-05 | Seleksi & simulasi | Kelayakan, skor/prioritas/tie-break sesuai aturan, kuota dan cadangan; hasil dapat direproduksi. |
 | 6 / A-06 | Persetujuan & hasil | Review dua pihak, publikasi terjadwal, hasil personal dan koreksi hasil berversi. |
 | 7 / A-07 | Sanggah & pengaduan | Tiket, bukti privat, penugasan, tanggapan, tenggat dan eskalasi. |
@@ -615,15 +727,16 @@ menu dan keputusan kebijakan ada di [PRD bagian 15.1](prd.md#151-roadmap-lanjuta
 | 11 / A-11 | Operasional & gate produksi | Audit berfilter, monitoring, backup/restore, retensi, pemindaian unggahan dan uji beban/akses. |
 | 12 / A-12 | Perluasan opsional | Pilihan lintas sekolah, geodata/jarak, swasta/gelombang, tes/beasiswa/pembayaran yang sah dan integrasi resmi berizin. |
 
-**Berikutnya A-03: pendaftar dan antrean kerja, lalu A-04 koreksi terkontrol.** Pembagian
+**Berikutnya A-05: seleksi dan simulasi.** Pembagian
 akses A-01 sudah mengikuti keputusan: pusat mengelola akun/master, admin sekolah
-menugaskan/memeriksa di sekolahnya, verifikator hanya peserta yang ditugaskan;
+menugaskan/memeriksa di sekolahnya, verifikator memeriksa peserta yang ditugaskan
+dan boleh mengambil tugas kosong melalui ringkasan minimum sekolahnya;
 satu staf boleh beberapa sekolah. Otorisasi ekspor dan hasil harus memakai
 scope ini ketika modulnya dibuat. Jangan langsung membangun ranking sebelum
 aturan dan data verifikasi siap.
 
-Setelah fondasi akses dan master operasional selesai, lanjut
-**A-03 antrean + A-04 koreksi**. Laporan verifikasi, informasi publik dan
+Setelah fondasi akses, master operasional, antrean dan koreksi selesai, lanjut
+**A-05 seleksi** dengan metode, rubrik dan tie-break yang disahkan. Laporan verifikasi, informasi publik dan
 operasional dapat disiapkan paralel sesuai prasyarat; A-11 dimulai sejak fondasi,
 bukan baru saat akhir. Target awal tetap SMP negeri Serdang Bedagai.
 

@@ -3,6 +3,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/admissions.php';
 require __DIR__ . '/admin.php';
+if ($path === '/admin/applications' || $path === '/admin/queue' || str_starts_with($path, '/admin/queue/')) {
+    require __DIR__ . '/queue_controller.php';
+    exit;
+}
 if (str_starts_with($path, '/admin/master-data/years') || str_starts_with($path, '/admin/master-data/rules')
     || $path === '/admin/rule-approvals' || str_starts_with($path, '/admin/rule-approvals/')) {
     require __DIR__ . '/operational_controller.php';
@@ -26,19 +30,22 @@ $history = [];
 $data = [];
 $decision = input('decision');
 $note = input('note');
-$query = is_string($_GET['q'] ?? '') ? trim($_GET['q'] ?? '') : '';
-$schoolFilter = is_string($_GET['period'] ?? '') ? ($_GET['period'] ?? '') : '';
-$statusFilter = is_string($_GET['status'] ?? '') ? ($_GET['status'] ?? '') : '';
-$pageInput = $_GET['page'] ?? '1';
-$page = is_string($pageInput) ? filter_var($pageInput, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 100000]]) : false;
-$invalidPage = $page === false;
-$page = $page === false ? 1 : $page;
 $periods = [];
 $rows = [];
 $total = 0;
 $stats = [];
 $assignment = null;
 $reviewers = [];
+$assignmentHistory = [];
+$duplicatePeers = [];
+$checklistItems = [];
+$checklistValues = [];
+$reviewFormVersion = 0;
+$reviewHistory = [];
+$revisions = [];
+$correctionRequests = [];
+$reviewedRevision = 0;
+$revisionView = '';
 $adminAllowed = isStaff($user) && $config['environment'] === 'development';
 
 try {
@@ -60,20 +67,42 @@ try {
     if ($screen === 'audit') {
         requireCentral($db, (int) $user['id']);
     }
-    if ($screen === 'applications' && $invalidPage) {
-        throw new AdmissionProblem('Nomor halaman tidak valid.', 422);
-    }
     $allowed = $screen === 'review' ? ['GET', 'POST'] : ['GET'];
     if (!in_array($_SERVER['REQUEST_METHOD'], $allowed, true)) {
         header('Allow: ' . implode(', ', $allowed));
         throw new AdmissionProblem('Metode permintaan tidak didukung.', 405);
     }
     if ($screen === 'review') {
-        $data = admissionData($application['data_json']);
+        $latestRevision = latestApplicationRevision($db,$application);
+        $reviewedRevision = (int)$latestRevision['revision'];
+        $revisionView = $_GET['revision'] ?? '';
+        if (!is_string($revisionView)) {
+            $screen = 'not-found';
+            throw new AdmissionProblem('Nomor revisi tidak valid.',422);
+        }
+        if ($revisionView !== '') {
+            $number = filter_var($revisionView,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
+            if ($number === false) {
+                $screen = 'not-found';
+                throw new AdmissionProblem('Nomor revisi tidak valid.',422);
+            }
+            $statement = $db->prepare('SELECT * FROM application_revisions WHERE application_id=? AND revision=?');
+            $statement->execute([$application['id'],$number]);
+            $latestRevision = $number === 0 ? ['revision'=>0,'data_json'=>$application['data_json'],
+                'documents_json'=>admissionJson(array_map(fn(array $d): string=>$d['id'],applicationDocuments($db,$application['id'])))]
+                : ($statement->fetch() ?: throw new AdmissionProblem('Revisi tidak ditemukan.',404));
+        }
+        $data = admissionData($latestRevision['data_json']);
         $period = admissionPresentation(admissionPeriod($db, $application['period_id']));
         $period['configuration'] = admissionData($application['rule_snapshot_json']);
         $period = admissionPresentation($period);
-        $documents = applicationDocuments($db, $application['id']);
+        $documents = revisionDocuments($db,$application['id'],$latestRevision['documents_json']);
+        $checklistItems = reviewChecklistItems($application,$documents);
+        $statement = $db->prepare('SELECT checklist_json,version FROM detailed_reviews WHERE application_id=?');
+        $statement->execute([$application['id']]);
+        $currentReview = $statement->fetch();
+        $checklistValues = admissionData($currentReview['checklist_json'] ?? '{}');
+        $reviewFormVersion = $currentReview ? (int)$currentReview['version'] : reviewVersion($db,$application['id']);
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!validCsrf()) {
                 throw new AdmissionProblem('Sesi formulir tidak valid. Muat ulang halaman.', 419);
@@ -84,18 +113,28 @@ try {
                 if ($reviewer === false || $version === false) {
                     throw new AdmissionProblem('Penugasan/versi tidak valid. Muat ulang peserta.', 409);
                 }
-                assignVerifier($db, $user, $application['id'], $reviewer, $version);
+                assignVerifier($db, $user, $application['id'], $reviewer, $version, input('assignment_note'));
                 flash('Penugasan verifikator tersimpan.');
             } else {
-                if (!in_array(input('action'), ['', 'verify'], true)) {
+                if ($revisionView !== '') {
+                    throw new AdmissionProblem('Versi arsip hanya baca. Kembali ke revisi terbaru untuk memeriksa.',409);
+                }
+                if (!in_array(input('action'), ['', 'verify','save-checklist','request-correction'], true)) {
                     throw new AdmissionProblem('Aksi pemeriksaan tidak valid.', 422);
                 }
                 $version = filter_var(input('verification_version'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
                 if ($version === false) {
                     throw new AdmissionProblem('Versi verifikasi tidak valid. Muat ulang halaman.', 409);
                 }
-                verifyApplication($db, (int) $user['id'], $application['id'], $version, $decision, $note);
-                flash('Keputusan verifikasi tersimpan dan dapat dilihat wali. Ini bukan keputusan penerimaan.');
+                $reviewFormVersion = $version;
+                $checklistValues = is_array($_POST['checklist'] ?? null) ? $_POST['checklist'] : [];
+                $fieldReasons = $_POST['correction_fields'] ?? [];
+                $docReasons = $_POST['correction_documents'] ?? [];
+                if (is_array($fieldReasons)) $fieldReasons = array_filter($fieldReasons,fn(mixed $v): bool=> !is_string($v) || trim($v)!=='');
+                if (is_array($docReasons)) $docReasons = array_filter($docReasons,fn(mixed $v): bool=> !is_string($v) || trim($v)!=='');
+                saveDetailedReview($db,(int)$user['id'],$application['id'],$version,input('action') ?: 'verify',
+                    $decision,$note,$checklistValues,$fieldReasons,$docReasons);
+                flash(input('action') === 'save-checklist' ? 'Checklist tersimpan.' : 'Keputusan/permintaan tersimpan dan wali mendapat notifikasi in-app. Ini bukan keputusan penerimaan.');
             }
             redirect($path);
         }
@@ -133,47 +172,28 @@ if ($adminAllowed) {
         $statement->execute($scopeParams);
         $stats = $statement->fetch();
     }
-    if ($screen === 'applications') {
-        if ($invalidPage) {
-            http_response_code(422);
-            $errors['form'] = 'Nomor halaman tidak valid.';
-        } elseif (!in_array($statusFilter, ['', 'pending', 'valid', 'needs_correction', 'invalid'], true)) {
-            http_response_code(422);
-            $errors['form'] = 'Filter verifikasi tidak valid.';
-        } else {
-            $where = ["a.status = 'submitted'", '(' . $applicationScope . ')'];
-            $parameters = $scopeParams;
-            if ($query !== '') {
-                $where[] = '(instr(lower(a.registration_number), lower(?)) > 0 OR instr(lower(a.data_json), lower(?)) > 0)';
-                array_push($parameters, $query, $query);
-            }
-            if ($schoolFilter !== '') {
-                $where[] = 'a.period_id = ?';
-                $parameters[] = $schoolFilter;
-            }
-            if ($statusFilter === 'pending') {
-                $where[] = 'v.status IS NULL';
-            } elseif ($statusFilter !== '') {
-                $where[] = 'v.status = ?';
-                $parameters[] = $statusFilter;
-            }
-            $from = ' FROM applications a JOIN admission_periods p ON p.id = a.period_id
-                JOIN period_school_links l ON l.period_id=a.period_id
-                LEFT JOIN application_verifications v ON v.application_id = a.id WHERE ' . implode(' AND ', $where);
-            $statement = $db->prepare('SELECT COUNT(*)' . $from);
-            $statement->execute($parameters);
-            $total = (int) $statement->fetchColumn();
-            $statement = $db->prepare('SELECT a.*, p.school, v.status AS verification_status' . $from
-                . ' ORDER BY a.submitted_at DESC, a.id LIMIT 25 OFFSET ' . (($page - 1) * 25));
-            $statement->execute($parameters);
-            $rows = $statement->fetchAll();
-        }
-    }
     if ($screen === 'review' && $application) {
         $statement = $db->prepare('SELECT va.*,u.name AS reviewer_name FROM verification_assignments va
             LEFT JOIN users u ON u.id=va.reviewer_id WHERE va.application_id=?');
         $statement->execute([$application['id']]);
         $assignment = $statement->fetch() ?: null;
+        $statement = $db->prepare('SELECT h.*,u.name AS actor_name,previous.name AS previous_name,reviewer.name AS reviewer_name
+            FROM assignment_history h JOIN users u ON u.id=h.actor_id
+            LEFT JOIN users previous ON previous.id=h.previous_reviewer_id LEFT JOIN users reviewer ON reviewer.id=h.reviewer_id
+            WHERE h.application_id=? ORDER BY h.id DESC LIMIT 50');
+        $statement->execute([$application['id']]);
+        $assignmentHistory = $statement->fetchAll();
+        $duplicatePeers = queueDuplicatePeers($db, $user, $application['id']);
+        $statement = $db->prepare('SELECT h.*,u.name AS reviewer_name FROM detailed_review_history h JOIN users u ON u.id=h.reviewer_id
+            WHERE h.application_id=? ORDER BY h.id DESC LIMIT 50');
+        $statement->execute([$application['id']]);
+        $reviewHistory = $statement->fetchAll();
+        $statement = $db->prepare('SELECT revision,submitted_at FROM application_revisions WHERE application_id=? ORDER BY revision DESC');
+        $statement->execute([$application['id']]);
+        $revisions = $statement->fetchAll();
+        $statement = $db->prepare('SELECT * FROM correction_requests WHERE application_id=? ORDER BY created_at DESC,id LIMIT 50');
+        $statement->execute([$application['id']]);
+        $correctionRequests = $statement->fetchAll();
         if (in_array($user['role'], ['central_admin', 'school_admin'], true)) {
             $statement = $db->prepare("SELECT u.id,u.name FROM staff_accounts s JOIN users u ON u.id=s.user_id
                 JOIN staff_schools ss ON ss.user_id=s.user_id JOIN period_school_links l ON l.school_id=ss.school_id

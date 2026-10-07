@@ -3,6 +3,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/admissions.php';
 require __DIR__ . '/admin.php';
+if ($path === '/applications/notifications' || preg_match('~\A/applications/[a-f0-9]{32}/corrections(?:/|$)~',$path)) {
+    require __DIR__ . '/correction_controller.php';
+    exit;
+}
 if ($path === '/participants/location') {
     require __DIR__ . '/location.php';
     handleLocationRequest($db, $config, (int) $user['id']);
@@ -40,6 +44,7 @@ $applications = [];
 $periods = [];
 $events = [];
 $verification = null;
+$unreadNotices = [];
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($path === '/dashboard') {
@@ -121,11 +126,14 @@ try {
             throw new AdmissionProblem('Akses dokumen admin belum dibuka pada produksi.', 403);
         }
         $statement = $db->prepare('SELECT d.* FROM application_documents d JOIN applications a ON a.id = d.application_id
-            WHERE d.id = ? AND d.deleted_at IS NULL AND (a.user_id = ? OR (CAST(? AS INTEGER) = 1 AND a.status = \'submitted\'))');
+            WHERE d.id = ? AND (a.user_id = ? OR (CAST(? AS INTEGER) = 1 AND a.status = \'submitted\'))');
         $statement->execute([$documentId, $userId, (int) $adminDocumentAccess]);
         $document = $statement->fetch();
         if (!$document) {
             throw new AdmissionProblem('Dokumen tidak ditemukan.', 404);
+        }
+        if ($document['deleted_at'] !== null && !correctionDocumentVisible($db,$document,$adminDocumentAccess,$userId)) {
+            throw new AdmissionProblem('Dokumen versi ini tidak ditemukan atau belum dikirim.',404);
         }
         if ($adminDocumentAccess) {
             authorizeStaffApplication($db, $user, $document['application_id']);
@@ -248,9 +256,13 @@ try {
 $statement = $db->prepare('SELECT * FROM participant_profiles WHERE user_id = ? ORDER BY updated_at DESC');
 $statement->execute([$userId]);
 $profiles = $statement->fetchAll();
-$statement = $db->prepare('SELECT a.*, p.school, p.academic_year, p.is_demo, p.timezone, r.status AS verification_status, MIN(COALESCE(v.enabled, 1), COALESCE(s.enabled, 1)) AS period_enabled FROM applications a
+$statement = $db->prepare('SELECT a.*, COALESCE(latest.data_json,a.data_json) AS current_data_json,
+    COALESCE(latest.revision,0) AS current_revision, COALESCE(latest.submitted_at,a.updated_at) AS current_saved_at,
+    p.school, p.academic_year, p.is_demo, p.timezone, r.status AS verification_status, MIN(COALESCE(v.enabled, 1), COALESCE(s.enabled, 1)) AS period_enabled FROM applications a
     JOIN admission_periods p ON p.id = a.period_id LEFT JOIN admission_period_availability v ON v.period_id = p.id
     LEFT JOIN application_verifications r ON r.application_id = a.id
+    LEFT JOIN application_revisions latest ON latest.application_id=a.id AND latest.revision=(
+        SELECT MAX(revision) FROM application_revisions WHERE application_id=a.id)
     LEFT JOIN period_school_links l ON l.period_id = p.id LEFT JOIN master_schools s ON s.id = l.school_id
     WHERE a.user_id = ? ORDER BY a.updated_at DESC');
 $statement->execute([$userId]);
@@ -285,11 +297,15 @@ if ($screen === 'periods') {
 }
 if ($application && in_array($screen, ['application', 'receipt'], true)) {
     $statement = $db->prepare("SELECT action, created_at FROM application_events WHERE application_id = ?
-        AND action IN ('draft_created', 'draft_saved', 'document_uploaded', 'document_removed', 'submitted') ORDER BY id DESC LIMIT 30");
+        AND action IN ('draft_created', 'draft_saved', 'document_uploaded', 'document_removed', 'submitted',
+            'correction_requested','correction_saved','correction_document_uploaded','correction_submitted') ORDER BY id DESC LIMIT 30");
     $statement->execute([$application['id']]);
     $events = array_reverse($statement->fetchAll());
 }
 $notice = takeFlash();
+$statement = $db->prepare('SELECT * FROM participant_notices WHERE user_id=? AND read_at IS NULL ORDER BY created_at DESC,id DESC LIMIT 5');
+$statement->execute([$userId]);
+$unreadNotices = $statement->fetchAll();
 if ($period) {
     $period = admissionPresentation($period);
 }
