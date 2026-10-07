@@ -15,6 +15,7 @@ try {
     if ($command === 'list') {
         foreach ($db->query('SELECT p.*, COALESCE(v.enabled, 1) AS enabled FROM admission_periods p
             LEFT JOIN admission_period_availability v ON v.period_id = p.id ORDER BY p.created_at DESC')->fetchAll() as $period) {
+            $period = admissionPeriod($db, $period['id']);
             echo $period['code'] . "\t" . $period['school'] . "\t" . periodState($period)
                 . "\t" . ($period['is_demo'] ? 'DEMO' : 'NON-DEMO') . PHP_EOL;
         }

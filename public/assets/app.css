@@ -148,8 +148,14 @@ h1 { font-size: clamp(28px, 2.8vw, 36px); line-height: 1.2; font-weight: 650; le
 .account-settings details > summary { padding: 14px 16px; cursor: pointer; font-size: 13px; line-height: 1.7; }
 .account-settings details > form { padding: 0 16px 16px; margin-top: 12px; }
 .account-settings-footer { margin-top: 24px; }
+.operational-class-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto; gap: 16px; align-items: start; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.operational-class-row .button { margin-top: 24px; }
+.operational-decision { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 24px; }
+.operational-hash { overflow-wrap: anywhere; }
 @media (max-width: 600px) {
     .account-settings form > .button, .account-settings-footer > .button { width: 100%; }
+    .operational-class-row { grid-template-columns: 1fr; gap: 0; }
+    .operational-class-row .button { margin: 0 0 12px; }
 }
 .checkbox-field { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; margin: 16px 0; font-size: 13px; line-height: 1.7; }
 .checkbox-field input { flex: 0 0 auto; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--primary); }

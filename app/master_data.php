@@ -81,6 +81,7 @@ function saveMasterSchool(PDO $db, ?string $id, int $actor, array $data, ?int $v
             $statement = $db->prepare('SELECT p.* FROM admission_periods p JOIN period_school_links l ON l.period_id=p.id WHERE l.school_id=?');
             $statement->execute([$id]);
             foreach ($statement->fetchAll() as $period) {
+                assertOperationalPeriodEditable($db, $period['id']);
                 $rules = admissionData($period['config_json']);
                 $rules = array_replace($rules, ['school' => $data['name'], 'npsn' => $data['npsn'], 'province' => $data['province'],
                     'regency' => $data['city'], 'district' => $data['district']]);
@@ -108,6 +109,7 @@ function saveMasterPeriod(PDO $db, ?string $id, int $actor, string $schoolId, ar
             throw new AdmissionProblem('Sekolah diarsipkan. Aktifkan sekolah sebelum membuat/mengedit periode.', 409);
         }
         if ($id) {
+            assertOperationalPeriodEditable($db, $id);
             $current = masterPeriod($db, $id);
             if ((int) $current['management_version'] !== $version) {
                 throw new AdmissionProblem('Periode telah berubah. Muat ulang halaman.', 409);
@@ -177,6 +179,11 @@ function masterAction(PDO $db, string $type, string $id, int $actor, int $versio
                     AND id IN (SELECT invitation_id FROM invitation_schools WHERE school_id=?)')->execute([time(), $id]);
                 $db->prepare('DELETE FROM master_schools WHERE id=?')->execute([$id]);
             } else {
+                $statement = $db->prepare('SELECT 1 FROM operational_rule_packs WHERE period_id=?');
+                $statement->execute([$id]);
+                if ($statement->fetchColumn()) {
+                    throw new AdmissionProblem('Periode memiliki riwayat paket aturan. Gunakan arsip; paket tidak dihapus.', 409);
+                }
                 foreach (['period_school_links', 'period_management', 'admission_period_availability'] as $table) {
                     $db->prepare("DELETE FROM $table WHERE period_id=?")->execute([$id]);
                 }
@@ -190,6 +197,9 @@ function masterAction(PDO $db, string $type, string $id, int $actor, int $versio
                 $db->prepare('UPDATE period_management SET version=version+1 WHERE period_id IN (SELECT period_id FROM period_school_links WHERE school_id=?)')->execute([$id]);
             }
         } else {
+            if ($action === 'activate' && !operationalPeriodReady($db, $id)) {
+                throw new AdmissionProblem('Terbitkan paket aturan yang disetujui terlebih dahulu sebelum mengaktifkan periode.', 409);
+            }
             if ($action === 'activate' && !(int) masterSchool($db, $item['school_id'])['enabled']) {
                 throw new AdmissionProblem('Aktifkan sekolah terlebih dahulu.', 409);
             }

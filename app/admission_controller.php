@@ -255,9 +255,16 @@ $statement = $db->prepare('SELECT a.*, p.school, p.academic_year, p.is_demo, p.t
     WHERE a.user_id = ? ORDER BY a.updated_at DESC');
 $statement->execute([$userId]);
 $applications = $statement->fetchAll();
+foreach ($applications as &$row) {
+    if (!operationalPeriodReady($db, $row['period_id'])) {
+        $row['period_enabled'] = 0;
+    }
+}
+unset($row);
 $periods = $db->query('SELECT p.* FROM admission_periods p LEFT JOIN admission_period_availability v ON v.period_id = p.id
     LEFT JOIN period_school_links l ON l.period_id = p.id LEFT JOIN master_schools s ON s.id = l.school_id
     WHERE COALESCE(v.enabled, 1) = 1 AND COALESCE(s.enabled, 1) = 1 ORDER BY p.is_demo ASC, p.school COLLATE NOCASE, p.opens_at DESC')->fetchAll();
+$periods = array_values(array_filter($periods, fn(array $row): bool => operationalPeriodReady($db, $row['id'])));
 $districts = [];
 foreach ($periods as $item) {
     $district = admissionData($item['config_json'])['district'] ?? '';

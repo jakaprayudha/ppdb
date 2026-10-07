@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/master_icon.php';
 
 function masterInput(string $key, string $label, array $values, int $maximum = 200, bool $textarea = false): void
 {
@@ -9,17 +10,6 @@ function masterInput(string $key, string $label, array $values, int $maximum = 2
         <?php else: ?><input id="<?= escape($key) ?>" name="<?= escape($key) ?>" maxlength="<?= $maximum ?>" value="<?= escape($values[$key] ?? '') ?>" required><?php endif; ?>
     </div>
     <?php
-}
-
-function masterIcon(string $icon): void
-{
-    $paths = [
-        'detail' => '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
-        'edit' => '<path d="m16 3 5 5-12 12-6 1 1-6L16 3Z"/><path d="m14 5 5 5"/>',
-        'delete' => '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
-        'copy' => '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',
-    ];
-    echo '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' . $paths[$icon] . '</svg>';
 }
 
 function masterStatusSwitch(array $record, string $type, string $url): void
@@ -136,6 +126,7 @@ $label = $schoolType ? 'Sekolah' : 'Periode pendaftaran';
             <div class="action-row"><a class="button button-outline" href="<?= escape($base) ?>">Kembali</a>
                 <?php if (!(int) $item['used']): ?><a class="button button-outline" href="<?= escape($base . '/' . $item['id']) ?>/edit">Edit</a><?php endif; ?>
                 <?php if (!$schoolType): ?><a class="button button-outline" href="<?= escape($base . '/new?copy=' . $item['id']) ?>">Salin menjadi periode baru</a><?php endif; ?>
+                <?php if (!$schoolType): ?><a class="button button-outline" href="<?= escape('/admin/master-data/rules/new?period=' . $item['id']) ?>">Susun paket operasional</a><?php endif; ?>
             </div>
             <?php if ($schoolType): ?><p class="field-help">Mengarsipkan sekolah mengarsipkan seluruh periodenya juga. Mengaktifkan sekolah tidak otomatis mengaktifkan kembali periode.</p><?php endif; ?>
         <?php endif; ?>

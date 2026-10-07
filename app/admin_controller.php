@@ -3,6 +3,11 @@ declare(strict_types=1);
 
 require __DIR__ . '/admissions.php';
 require __DIR__ . '/admin.php';
+if (str_starts_with($path, '/admin/master-data/years') || str_starts_with($path, '/admin/master-data/rules')
+    || $path === '/admin/rule-approvals' || str_starts_with($path, '/admin/rule-approvals/')) {
+    require __DIR__ . '/operational_controller.php';
+    exit;
+}
 if ($path === '/admin/accounts' || str_starts_with($path, '/admin/accounts/')) {
     require __DIR__ . '/staff_controller.php';
     exit;
@@ -110,6 +115,12 @@ if ($adminAllowed) {
         LEFT JOIN master_schools s ON s.id=l.school_id WHERE (' . $periodScope . ') ORDER BY p.school COLLATE NOCASE');
     $statement->execute($periodParams);
     $periods = $statement->fetchAll();
+    foreach ($periods as &$row) {
+        if (!operationalPeriodReady($db, $row['id'])) {
+            $row['enabled'] = 0;
+        }
+    }
+    unset($row);
     [$applicationScope, $scopeParams] = staffScope($user, 'l.school_id', 'a.id');
     if ($screen === 'dashboard') {
         $statement = $db->prepare("SELECT COUNT(*) AS total, SUM(a.status = 'draft') AS drafts,

@@ -212,6 +212,45 @@ function database(string $storage): PDO
             version INTEGER NOT NULL DEFAULT 1,
             used INTEGER NOT NULL DEFAULT 0 CHECK (used IN (0, 1))
         );
+        CREATE TABLE IF NOT EXISTS academic_years (
+            id TEXT PRIMARY KEY,
+            label TEXT NOT NULL UNIQUE,
+            starts_on TEXT NOT NULL DEFAULT '',
+            ends_on TEXT NOT NULL DEFAULT '',
+            enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0,1)),
+            version INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE TABLE IF NOT EXISTS operational_rule_packs (
+            id TEXT PRIMARY KEY,
+            period_id TEXT NOT NULL REFERENCES admission_periods(id),
+            school_id TEXT NOT NULL REFERENCES master_schools(id),
+            year_id TEXT NOT NULL REFERENCES academic_years(id),
+            revision INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','pending','returned','approved','published','superseded')),
+            payload_json TEXT NOT NULL,
+            source_json TEXT NOT NULL,
+            source_hash TEXT NOT NULL,
+            payload_hash TEXT,
+            reason TEXT NOT NULL,
+            created_by INTEGER NOT NULL REFERENCES users(id),
+            submitted_by INTEGER REFERENCES users(id),
+            approved_by INTEGER REFERENCES users(id),
+            version INTEGER NOT NULL DEFAULT 1,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            UNIQUE(period_id,revision)
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS operational_published_idx ON operational_rule_packs(period_id) WHERE status='published';
+        CREATE UNIQUE INDEX IF NOT EXISTS operational_working_idx ON operational_rule_packs(period_id)
+            WHERE status IN ('draft','pending','returned','approved');
+        CREATE TABLE IF NOT EXISTS operational_rule_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pack_id TEXT NOT NULL REFERENCES operational_rule_packs(id),
+            actor_id INTEGER NOT NULL REFERENCES users(id),
+            action TEXT NOT NULL,
+            note TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        );
         CREATE TRIGGER IF NOT EXISTS remember_period_usage AFTER INSERT ON applications
         BEGIN
             INSERT INTO period_management(period_id, used) VALUES (NEW.period_id, 1)
@@ -221,6 +260,9 @@ function database(string $storage): PDO
         ON CONFLICT(period_id) DO UPDATE SET used = 1;
     SQL);
     syncMasterSchools($db);
+    $db->exec("INSERT INTO academic_years(id,label)
+        SELECT lower(hex(randomblob(16))),academic_year FROM admission_periods
+        WHERE academic_year NOT IN (SELECT label FROM academic_years) GROUP BY academic_year");
     return $db;
 }
 

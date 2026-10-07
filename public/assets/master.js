@@ -103,3 +103,43 @@ document.querySelectorAll('.master-dropdown').forEach(dropdown => {
         if (!dropdown.contains(event.target)) dropdown.open = false;
     });
 });
+
+document.querySelectorAll('[data-operational-editor]').forEach(form => {
+    const container = form.querySelector('[data-operational-classes]');
+    const template = form.querySelector('[data-operational-class-template]');
+    const status = form.querySelector('[data-operational-status]');
+    const renumber = () => {
+        container.querySelectorAll('[data-operational-class]').forEach((row, index) => {
+            row.querySelectorAll('input').forEach(input => {
+                input.name = input.name.replace(/classes\[\d+\]/, `classes[${index}]`);
+            });
+            row.querySelector('[data-remove-operational-class]').value = String(index);
+        });
+    };
+    form.querySelector('[data-add-operational-class]').addEventListener('click', event => {
+        event.preventDefault();
+        if (container.children.length >= 100) {
+            status.textContent = 'Maksimal 100 rombel.';
+            return;
+        }
+        container.append(template.content.cloneNode(true));
+        renumber();
+        container.lastElementChild.querySelector('input').focus();
+        status.textContent = 'Rombel ditambahkan. Periksa total kursi sebelum menyimpan.';
+        form.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    container.addEventListener('click', event => {
+        const button = event.target.closest('[data-remove-operational-class]');
+        if (!button) return;
+        event.preventDefault();
+        if (container.children.length <= 1) {
+            status.textContent = 'Minimal satu rombel diperlukan.';
+            return;
+        }
+        button.closest('[data-operational-class]').remove();
+        renumber();
+        status.textContent = 'Rombel dihapus. Sesuaikan daya tampung dan kuota.';
+        form.querySelector('[data-add-operational-class]').focus();
+        form.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+});

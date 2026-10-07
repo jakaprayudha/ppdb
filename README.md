@@ -65,8 +65,9 @@ verifikator tersedia untuk pengujian lokal dengan pembatasan sekolah/penugasan.
 2FA opsional untuk staf dan wali, nonaktif secara default. Kepemilikan email staf diverifikasi lewat undangan atau tautan
 verifikasi untuk admin lama. Wali dapat memverifikasi email melalui tautan **Akun
 wali** di header; verifikasi email wali belum menjadi syarat alur pilot, tetapi
-wajib dijadikan gate sebelum data nyata dikaitkan ke akun. Pemisahan approver dan
-persetujuan keputusan/aturan belum tersedia.
+wajib dijadikan gate sebelum data nyata dikaitkan ke akun.
+Persetujuan hasil seleksi belum tersedia. Persetujuan paket aturan operasional
+oleh approver sekolah yang berbeda dari penyusun/pengaju sudah tersedia.
 **Seluruh perubahan pada modul registrasi diblokir pada `APP_ENV=production`.**
 Modul ini adalah pilot pengembangan, bukan layanan penerimaan pemerintah yang siap dibuka.
 
@@ -228,9 +229,73 @@ Jangan mengunggah storage ke version control. Untuk akun yang mengaktifkan 2FA,
 sesi yang belum lolos challenge tidak bisa mengakses dashboard/data/dokumen
 walaupun password sudah benar; berlaku untuk staf maupun wali.
 
-Penanda **Calon approver** terpisah dari peran dasar dan hanya persiapan grant:
-belum memberi hak menerbitkan aturan/hasil. Pemisahan pengaju/pengesah baru akan
-diberlakukan saat modul persetujuan dibangun.
+Hak **Approver paket aturan sekolah** terpisah dari peran dasar. Staf aktif dengan
+hak ini dapat meninjau, menyetujui atau mengembalikan paket pada sekolah yang
+ditugaskan, bukan paket yang disusun/diajukannya sendiri. Penerbitan tetap oleh
+admin pusat; hak approver belum mencakup hasil seleksi.
+
+### Tahap 2: master operasional dan persetujuan aturan
+
+Tersedia melalui dropdown **Master data → Tahun ajaran / Paket aturan operasional**.
+Daftar memakai pencarian, pagination 10 baris, ikon detail/edit/hapus yang sesuai
+status, dan toggle aktif/arsip tahun ajaran.
+
+1. **Tahun ajaran:** label dua tahun berurutan, tanggal mulai/akhir, status
+   aktif/arsip. Label tahun dari periode lama dimigrasikan tanpa menebak tanggal;
+   lengkapi tanggal sebelum dipakai paket. Label yang dipakai periode tidak dapat
+   diganti; tanggal/label tahun yang dipakai paket terkunci. Hapus hanya sebelum
+   dipakai, dengan konfirmasi. Arsip tahun membatasi pembuatan/persetujuan paket
+   baru, tidak menutup periode terbit secara diam-diam.
+2. **Rombel dan daya tampung:** nama rombel unik, jumlah kursi per rombel,
+   batas kursi dari Juknis, total kapasitas. Total rombel wajib tepat kapasitas.
+   Tambah/hapus rombel bekerja dengan JS maupun POST tanpa JS. Tidak ada kapasitas
+   atau batas resmi yang diisi otomatis.
+3. **Kuota jalur:** kursi bulat untuk tepat semua jalur periode, total sama
+   kapasitas. Persentase ringkasan dihitung dari kursi; validasi memakai hitungan
+   bilangan bulat, bukan persentase tampilan yang dibulatkan. Baseline negeri
+   Permendikdasmen 3/2025: SD domisili ≥70%, afirmasi ≥15%; SMP ≥40%/20%/25%
+   untuk domisili/afirmasi/prestasi; SMA ≥30%/30%/30%. Mutasi ≤5%, prestasi tidak
+   untuk SD. Ambang ini tidak diterapkan otomatis ke swasta mandiri. Kuota efektif,
+   pembulatan dan kursi sisa tetap harus ditentukan dari Juknis yang diperiksa.
+4. **Jadwal tujuh tahap:** pendaftaran, verifikasi, perbaikan, seleksi,
+   pengumuman, sanggah, daftar ulang, memakai zona waktu periode. Pendaftaran
+   mengikuti pembukaan/penutupan periode. Verifikasi boleh overlap pendaftaran
+   dan perbaikan; perbaikan dalam rentang verifikasi. Seleksi setelah ketiganya
+   selesai; pengumuman → sanggah → daftar ulang berurutan. Rentang masuk tahun
+   kalender awal hingga akhir tahun ajaran. Jadwal selain pendaftaran masih
+   konfigurasi untuk modul lanjutan, bukan eksekusi seleksi/koreksi otomatis.
+5. **Juknis:** nomor, penerbit, versi, tanggal terbit, masa berlaku, tautan
+   naskah HTTPS tanpa kredensial, serta rujukan prioritas/tie-break/pembulatan/
+   kursi sisa. Masa berlaku wajib mencakup pendaftaran sampai daftar ulang.
+   Server tidak mengunduh tautan; penyimpanan salinan PDF Juknis belum tersedia.
+   Persetujuan panitia dalam aplikasi bukan pengesahan legalitas naskah.
+6. **Paket per sekolah/periode:** snapshot identitas, jalur/dokumen dan konfigurasi
+   sumber, versi, alasan perubahan, fingerprint SHA-256, serta riwayat aktor/
+   catatan/waktu. Draf → diajukan → disetujui → diterbitkan; approver dapat
+   mengembalikan untuk diedit/diajukan lagi. Approver wajib berbeda dari penyusun
+   dan pengaju. Konflik versi, sumber berubah dan grant approver dicabut ditolak.
+   Paket disetujui dapat diajukan ulang bila perlu approver baru.
+
+**Cara mencoba:** lengkapi tahun ajaran → siapkan periode belum pernah dipakai
+(salin periode lama bila perlu) → susun paket dan tinjau ringkasannya → ajukan →
+login sebagai staf sekolah dengan grant approver untuk menyetujui/mengembalikan →
+admin pusat menerbitkan → aktifkan periode lewat toggle katalog.
+
+Paket pertama mengarsipkan periode hingga diterbitkan. Penerbitan tidak otomatis
+mengaktifkan katalog; jadwal, status sekolah dan toggle periode tetap berlaku.
+Paket terbit tidak diedit: versi berikutnya memerlukan persetujuan baru, dan hanya
+bisa mengganti versi lama jika periode belum pernah dipakai. Setelah ada draf
+sekalipun, gunakan periode baru; aturan/snapshot peserta tidak ditimpa. Paket/
+riwayatnya tidak dihapus lewat UI dan periode yang memiliki paket tidak bisa
+dihapus. Identitas sekolah/periode dibekukan saat paket diajukan/terbit.
+
+Periode pilot lama tanpa paket tetap mengikuti perilaku development sebelumnya;
+tidak dianggap memiliki persetujuan operasional. Setelah periode masuk alur paket,
+aktivasi/manual SQL/seed katalog tidak melewati pemeriksaan status dan integritas
+paket pada daftar, detail, POST pendaftaran, master, dashboard atau CLI list.
+Konfigurasi paket terbit ikut `rule_snapshot_json` saat peserta mengirim.
+Import atau salin periode tidak dapat membawa klaim persetujuan `operational`;
+paket harus diterbitkan ulang melalui alur resmi. **Semua gate produksi tetap ada.**
 
 ### CRUD master sekolah dan periode
 
@@ -518,21 +583,27 @@ Tes staf mencakup undangan valid/batal/kedaluwarsa/sekali pakai, kolisi email
 tanpa promosi wali, email verification/CSRF, MFA/replay/rate limit, hash recovery,
 enkripsi secret, rotasi autentikator, penugasan beberapa sekolah, akses GET/POST/
 dokumen lintas sekolah, pembatasan verifikator, konflik versi dan pencabutan sesi.
+Tes operasional mencakup CRUD/lock tahun, kapasitas rombel dan kuota tepat,
+ambang negeri dengan kursi bulat, swasta tanpa ambang negeri, overlap/urutan tahap,
+validitas/masa berlaku Juknis, sumber berubah, CSRF/versi, isolasi approver,
+pengembalian/persetujuan/penerbitan, pencabutan hak, versi berikutnya, snapshot
+kiriman, integritas, gate katalog/CLI/produksi dan rombel tanpa JavaScript.
 
 ## Berikutnya
 
 ### Roadmap admin-first
 
-**A-01 sudah tersedia untuk pengujian development**: undangan staf, grant sekolah,
-MFA/email verification, pengelolaan akun dan pencabutan sesi. Penugasan verifikator
+**A-01 dan A-02 tersedia untuk pengujian development**: undangan staf, grant sekolah,
+2FA/email verification, akun/sesi, tahun ajaran dan paket operasional dengan
+kapasitas/kuota/jadwal/Juknis/persetujuan. Penugasan verifikator
 dasar dari A-03 juga tersedia; pengelolaan antrean lengkap belum. Tahap lain tetap
 backlog, bukan fitur aktif. Rincian scope, prasyarat, kriteria penerimaan, rancangan
 menu dan keputusan kebijakan ada di [PRD bagian 15.1](prd.md#151-roadmap-lanjutan-admin-terlebih-dahulu).
 
 | Prioritas | Improvement | Hasil yang dituju |
 |---|---|---|
-| 1 / A-01 | Akun, peran & akses sekolah (tersedia pada development) | Undangan staf, penugasan sekolah, izin aksi, pencabutan akses/sesi, MFA staf dan verifikasi email. Approver hanya penanda persiapan. |
-| 2 / A-02 | Master operasional & aturan | Tahun ajaran, rombel, daya tampung, kuota jalur, jadwal tiap tahap, Juknis, versi dan persetujuan paket aturan. |
+| 1 / A-01 | Akun, peran & akses sekolah (tersedia pada development) | Undangan staf, penugasan sekolah, izin aksi, pencabutan akses/sesi, 2FA opsional dan verifikasi email. Grant approver aturan aktif. |
+| 2 / A-02 | Master operasional & aturan (tersedia pada development) | Tahun ajaran, rombel, daya tampung, kuota jalur, jadwal tiap tahap, metadata/tautan Juknis, versi dan persetujuan paket aturan. |
 | 3 / A-03 | Pendaftar & antrean | Tabel/filter/sort, penugasan verifikator, antrean kerja dan tinjauan potensi duplikasi. |
 | 4 / A-04 | Verifikasi rinci & koreksi | Checklist per berkas/kriteria, permintaan perbaikan terbatas, tenggat, revisi dan kirim ulang tanpa menimpa snapshot awal. |
 | 5 / A-05 | Seleksi & simulasi | Kelayakan, skor/prioritas/tie-break sesuai aturan, kuota dan cadangan; hasil dapat direproduksi. |
@@ -544,14 +615,14 @@ menu dan keputusan kebijakan ada di [PRD bagian 15.1](prd.md#151-roadmap-lanjuta
 | 11 / A-11 | Operasional & gate produksi | Audit berfilter, monitoring, backup/restore, retensi, pemindaian unggahan dan uji beban/akses. |
 | 12 / A-12 | Perluasan opsional | Pilihan lintas sekolah, geodata/jarak, swasta/gelombang, tes/beasiswa/pembayaran yang sah dan integrasi resmi berizin. |
 
-**Berikutnya A-02: master operasional, kuota/jadwal/aturan berversi.** Pembagian
+**Berikutnya A-03: pendaftar dan antrean kerja, lalu A-04 koreksi terkontrol.** Pembagian
 akses A-01 sudah mengikuti keputusan: pusat mengelola akun/master, admin sekolah
 menugaskan/memeriksa di sekolahnya, verifikator hanya peserta yang ditugaskan;
-satu staf boleh beberapa sekolah. Otorisasi ekspor dan persetujuan harus memakai
+satu staf boleh beberapa sekolah. Otorisasi ekspor dan hasil harus memakai
 scope ini ketika modulnya dibuat. Jangan langsung membangun ranking sebelum
 aturan dan data verifikasi siap.
 
-Setelah fondasi akses selesai, lanjut **A-02 kuota/jadwal/aturan**, lalu
+Setelah fondasi akses dan master operasional selesai, lanjut
 **A-03 antrean + A-04 koreksi**. Laporan verifikasi, informasi publik dan
 operasional dapat disiapkan paralel sesuai prasyarat; A-11 dimulai sejak fondasi,
 bukan baru saat akhir. Target awal tetap SMP negeri Serdang Bedagai.

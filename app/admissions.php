@@ -132,6 +132,9 @@ function admissionPeriod(PDO $db, string $id): array
         throw new AdmissionProblem('Periode penerimaan tidak ditemukan.', 404);
     }
     $period['configuration'] = admissionData($period['config_json']);
+    if (!operationalPeriodReady($db, $id)) {
+        $period['enabled'] = 0;
+    }
     return $period;
 }
 
@@ -430,6 +433,9 @@ function submitApplication(PDO $db, string $id, int $userId, int $version, bool 
 
 function validatePeriodConfiguration(array $input): array
 {
+    if (array_key_exists('operational', $input)) {
+        throw new InvalidArgumentException('Paket operasional hanya dapat dipasang melalui persetujuan dan penerbitan di portal admin; hapus field operational dari import/salin konfigurasi.');
+    }
     if (isset($input['admission_mode']) && !in_array($input['admission_mode'], ['public_spmb', 'private_independent'], true)) {
         throw new InvalidArgumentException('Mode penerimaan tidak valid.');
     }

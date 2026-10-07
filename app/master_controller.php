@@ -69,6 +69,7 @@ try {
         $formData['school_id'] = $source['school_id'] ?? '';
         if (!$item) {
             $formData['code'] = '';
+            unset($formData['operational']);
         }
         if ($method === 'POST') {
             foreach (['code', 'organizer', 'academic_year', 'timezone', 'opens_at', 'closes_at',
@@ -154,6 +155,14 @@ if ($adminAllowed && $screen === 'master' && $mode === 'list' && $page > 0) {
     $statement = $db->prepare($select . $from . $order . ' LIMIT 10 OFFSET ' . (($page - 1) * 10));
     $statement->execute([$query]);
     $rows = $statement->fetchAll();
+    if ($type === 'periods') {
+        foreach ($rows as &$row) {
+            if (!operationalPeriodReady($db, $row['id'])) {
+                $row['enabled'] = 0;
+            }
+        }
+        unset($row);
+    }
 }
 $notice = takeFlash();
 require __DIR__ . '/views/admin.php';

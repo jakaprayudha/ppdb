@@ -2,7 +2,8 @@
 declare(strict_types=1);
 require __DIR__ . '/participant_summary.php';
 $titles = ['dashboard' => 'Dashboard ' . (isStaff($user) ? strtolower(staffRoleLabel($user['role'])) : 'admin'), 'applications' => 'Verifikasi pendaftaran', 'master' => 'Master data',
-    'accounts' => 'Akun & akses sekolah', 'audit' => 'Audit aktivitas', 'review' => 'Pemeriksaan peserta', 'not-found' => 'Halaman tidak tersedia'];
+    'accounts' => 'Akun & akses sekolah', 'operational' => isset($type) && $type === 'years' ? 'Tahun ajaran' : 'Paket aturan operasional',
+    'audit' => 'Audit aktivitas', 'review' => 'Pemeriksaan peserta', 'not-found' => 'Halaman tidak tersedia'];
 $title = $titles[$screen];
 $navigation = ['/admin' => ['dashboard', 'Dashboard'], '/admin/applications' => ['applications', 'Verifikasi'],
     '/admin/master-data' => ['master', 'Master data'], '/admin/accounts' => ['accounts', 'Akun & akses'], '/admin/audit' => ['audit', 'Audit']];
@@ -10,6 +11,13 @@ if ($user['role'] !== 'central_admin') {
     unset($navigation['/admin/master-data'], $navigation['/admin/accounts'], $navigation['/admin/audit']);
 }
 $navigation['/account/security'] = ['security', 'Profil akun'];
+if (isStaff($user) && $user['role'] !== 'central_admin') {
+    $approverCheck = $db->prepare('SELECT 1 FROM staff_accounts WHERE user_id=? AND enabled=1 AND can_approve=1');
+    $approverCheck->execute([$user['id']]);
+    if ($approverCheck->fetchColumn()) {
+        $navigation['/admin/rule-approvals'] = ['operational', 'Persetujuan aturan'];
+    }
+}
 ?>
 <!doctype html>
 <html lang="id">
@@ -22,14 +30,14 @@ $navigation['/account/security'] = ['security', 'Profil akun'];
         <div class="header-actions"><span class="role-tag"><?= escape($user['name']) ?></span><form method="post" action="/logout"><input type="hidden" name="csrf" value="<?= escape(csrfToken()) ?>"><button class="button button-outline" type="submit">Keluar</button></form></div>
     </header>
     <?php if ($adminAllowed): ?><nav class="portal-nav admin-nav" aria-label="Navigasi admin"><?php foreach ($navigation as $url => [$key, $label]): ?>
-        <?php if ($key === 'master'): ?><details class="master-dropdown"><summary<?= $screen === 'master' ? ' class="active-menu"' : '' ?>>Master data</summary><div class="master-dropdown-menu"><a href="/admin/master-data/periods">Periode pendaftaran</a><a href="/admin/master-data/schools">Sekolah</a></div></details>
+        <?php if ($key === 'master'): ?><details class="master-dropdown"><summary<?= in_array($screen, ['master','operational'], true) ? ' class="active-menu"' : '' ?>>Master data</summary><div class="master-dropdown-menu"><a href="/admin/master-data/periods">Periode pendaftaran</a><a href="/admin/master-data/schools">Sekolah</a><a href="/admin/master-data/years">Tahun ajaran</a><a href="/admin/master-data/rules">Paket aturan operasional</a></div></details>
         <?php else: ?><a href="<?= escape($url) ?>"<?= ($screen === $key || ($key === 'applications' && $screen === 'review')) ? ' aria-current="page"' : '' ?>><?= escape($label) ?></a><?php endif; ?>
     <?php endforeach; ?></nav><?php endif; ?>
 </div>
 <main id="main" class="dashboard-main admission-main">
     <p class="eyebrow">PENGELOLAAN PENERIMAAN</p><h1><?= escape($title) ?></h1>
     <?php if ($notice): ?><div class="notice" role="status"><?= escape($notice) ?></div><?php endif; ?>
-    <?php if ($errors): ?><div class="error-summary" role="alert" tabindex="-1" data-error-summary><?= escape($errors['form']) ?><?php if (http_response_code() === 409): ?><p><a href="<?= escape($path) ?>"><?= $screen === 'master' ? 'Muat ulang data' : 'Muat ulang verifikasi' ?></a></p><?php endif; ?></div><?php endif; ?>
+    <?php if ($errors): ?><div class="error-summary" role="alert" tabindex="-1" data-error-summary><?= escape($errors['form']) ?><?php if (http_response_code() === 409): ?><p><a href="<?= escape($path) ?>"><?= in_array($screen, ['master','operational'], true) ? 'Muat ulang data' : 'Muat ulang verifikasi' ?></a></p><?php endif; ?></div><?php endif; ?>
     <?php if ($screen === 'dashboard'): ?>
         <p class="lead">Pantau pendaftaran dan antrean pemeriksaan berkas <?= $user['role'] === 'central_admin' ? 'seluruh sekolah' : 'sesuai sekolah dan penugasan Anda' ?>.</p>
         <div class="stats-grid admin-stats">
@@ -85,6 +93,7 @@ $navigation['/account/security'] = ['security', 'Profil akun'];
             <ol class="activity-list"><?php foreach ($history as $event): ?><li><strong><?= escape(verificationLabel($event['status'])) ?></strong><p><?= nl2br(escape($event['note'])) ?></p><span><?= escape($event['reviewer_name'] . ' · ' . admissionDate((int) $event['created_at'], $period['timezone'])) ?></span></li><?php endforeach; ?></ol>
         </section>
     <?php elseif ($screen === 'master'): require __DIR__ . '/master.php'; ?>
+    <?php elseif ($screen === 'operational'): require __DIR__ . '/operational.php'; ?>
     <?php elseif ($screen === 'accounts'): require __DIR__ . '/staff_accounts.php'; ?>
     <?php elseif ($screen === 'audit'): ?>
         <section class="form-card"><h2>100 aktivitas terakhir</h2><ol class="activity-list"><?php foreach ($rows as $row): ?><li><strong><?= escape($row['action']) ?></strong><span><?= escape(($row['name'] ?? 'Tanpa akun') . ' · ' . admissionDate((int) $row['created_at'], 'Asia/Jakarta')) ?></span></li><?php endforeach; ?></ol></section>
